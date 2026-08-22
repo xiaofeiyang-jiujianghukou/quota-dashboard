@@ -159,6 +159,14 @@ export async function collect(cfg) {
               expiresAt: expiryIso,
               extra: {},
             };
+            // usage=周期总额度, remaining=剩余（与 percentage 一致，实测验证）
+            const _total = toNum(limit.usage);
+            const _rem = toNum(limit.remaining);
+            if (_total != null && _total > 0) {
+              item.total = _total;
+              item.remaining = _rem != null ? _rem : _total;
+              item.used = _total - (item.remaining || 0);
+            }
             // 5 小时滚动窗口未开始使用时，接口不返回重置时间 → 给出友好提示
             // （usage/remaining 绝对值语义含糊且与 percentage 矛盾，不展示，只以百分比为准）
             if (!limit.nextResetTime && !(limit.unit === 6)) {

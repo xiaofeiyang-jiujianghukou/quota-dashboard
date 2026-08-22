@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { volcSign } from '../lib/signers.js';
-import { planPrice, planPriceNum } from '../lib/pricing.js';
+import { planPrice, planPriceNum, planQuotaText } from '../lib/pricing.js';
 import { toNum } from './util.js';
 
 export const id = 'ark';
@@ -149,6 +149,7 @@ async function collectHttp(cfg, p) {
       planName,
       priceText,
       price,
+      quotaText: planQuotaText(cfg, 'ark', meta.planTier),
       percentUsed: toNum(q.Percent),
       unit: 'used',
       resetAt,

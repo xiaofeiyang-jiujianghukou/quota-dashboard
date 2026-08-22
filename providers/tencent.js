@@ -6,7 +6,7 @@
 //                            (CycleCapacity/CycleRemain/CycleTotalUsage/RemainCycles/DailyUsageList)
 // 注: 用户实际购买的混元套餐走 hunyuan 产品线，而非 TokenHub 平台（DescribeTokenPlanList 为空）
 import { tc3Request } from '../lib/tc3.js';
-import { planPrice, planPriceNum } from '../lib/pricing.js';
+import { planPrice, planPriceNum, planQuotaText } from '../lib/pricing.js';
 import { toNum } from './util.js';
 
 export const id = 'tencent';
@@ -44,6 +44,14 @@ function planDisplayName(plan, cfg) {
   if (cfg.providers.tencent.planName) return cfg.providers.tencent.planName; // 用户自定义覆盖
   if (plan.Plan && TEN_CENT_PLAN_NAMES[plan.Plan]) return TEN_CENT_PLAN_NAMES[plan.Plan];
   return plan.Plan ? `混元 Token Plan · ${plan.Plan}（${editionText(plan.Edition)}）` : '混元 Token Plan';
+}
+
+/** 大数友好格式化：35000000 → 3500万；1249000000 → 12.49亿 */
+function fmtBig(n) {
+  if (n == null) return '';
+  if (n >= 1e8) return (n / 1e8).toFixed(n % 1e8 === 0 ? 0 : 2) + '亿';
+  if (n >= 1e4) return (n / 1e4).toFixed(n % 1e4 === 0 ? 0 : 1) + '万';
+  return String(n);
 }
 
 /** "2026-09-21 09:22:59"（北京时区无后缀）或 RFC3339 → ISO */
@@ -143,6 +151,7 @@ export async function collect(cfg) {
       planName: null, // 标题已含完整套餐名，避免重复展示；金额单列
       priceText: planPrice(cfg, 'tencent', plan.Plan),
       price: planPriceNum(cfg, 'tencent', plan.Plan),
+      quotaText: total != null ? `周期 ${fmtBig(total)} token` : planQuotaText(cfg, 'tencent', plan.Plan),
       total,
       used,
       remaining,

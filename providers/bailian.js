@@ -6,7 +6,7 @@
 //        （Authorization: Bearer <cliAccessToken>）
 // 说明: 百炼官方对 Token Plan 只暴露周用量百分比（per1WeekPercentage）
 import { acs3Sign } from '../lib/signers.js';
-import { planPrice, planPriceNum } from '../lib/pricing.js';
+import { planPrice, planPriceNum, planQuotaText } from '../lib/pricing.js';
 import { toNum } from './util.js';
 
 export const id = 'bailian';
@@ -171,6 +171,7 @@ async function collectHttp(cfg, p) {
     planName: specName || 'Token Plan 个人版',
     priceText: planPrice(cfg, 'bailian', spec),
     price: planPriceNum(cfg, 'bailian', spec),
+    quotaText: planQuotaText(cfg, 'bailian', spec),
     percentUsed: pct,
     remainingPercent: 100 - pct, // 订阅级展示：剩余比例
     unit: 'used',

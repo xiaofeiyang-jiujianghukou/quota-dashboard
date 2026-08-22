@@ -80,6 +80,7 @@ export async function collect(cfg) {
     // 订阅信息（控制台会话 Cookie）：到期时间/套餐名
     const sub = p.sessionCookie ? await fetchSubscribe(p, timeoutMs) : null;
     const subExpiry = sub && sub.endTimeTs ? epochToISO(sub.endTimeTs) : null;
+    const subQuota = (sub && sub.quotaText) || null;
     const subPlanName = (() => {
       if (p.planName) return p.planName;
       if (!sub || !sub.title) return 'Token Plan';
@@ -114,6 +115,7 @@ export async function collect(cfg) {
         resetAt: epochToISO(m.end_time),
         resetLabel: '5 小时重置',
         expiresAt: subExpiry,
+        quotaText: subQuota || planQuotaText(cfg, 'minimax', (p.planName || subPlanName).toLowerCase()),
         extra: {
           status: statusText,
           weeklyRemainingPercent: weeklyRemainPct,
@@ -189,10 +191,13 @@ async function fetchSubscribe(p, timeoutMs) {
     const s = json && json.current_subscribe;
     if (!s) return null;
     const endTs = toNum(s.current_subscribe_end_time_ts);
+    const combo = json && json.current_combo_card;
+    const benefit = Array.isArray(combo && combo.credit_benefit) ? combo.credit_benefit[0] : null;
     return {
       title: s.current_subscribe_title || null,
       endTimeTs: endTs && endTs > 0 ? endTs : null,
       endTimeText: s.current_subscribe_end_time || null,
+      quotaText: benefit || null,
     };
   } catch {
     return null;

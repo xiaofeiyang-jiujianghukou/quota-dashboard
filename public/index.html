@@ -477,9 +477,9 @@ function render() {
     card.className = 'card';
     const accent = providerColor(pv.id);
     // 套餐信息（档位+价格）与到期时间：均为卡片级，公共信息只显示一次
-    const cardPlanItem = (pv.items || []).find((it) => it.planName || it.priceText);
+    const cardPlanItem = (pv.items || []).find((it) => it.planName || it.priceText || it.quotaText);
     const cardPlanInfo = cardPlanItem
-      ? [cardPlanItem.planName, cardPlanItem.priceText].filter(Boolean).join(' · ')
+      ? [cardPlanItem.planName, cardPlanItem.priceText, cardPlanItem.quotaText].filter(Boolean).join(' · ')
       : '';
     const cardExpiryItem = (pv.items || []).find((it) => it.expiresAt);
     const headChips =
