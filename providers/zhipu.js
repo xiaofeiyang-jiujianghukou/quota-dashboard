@@ -143,6 +143,18 @@ export async function collect(cfg) {
         if (subInfo && subInfo.daysToExpire != null) {
           expiryIso = new Date(Date.now() + subInfo.daysToExpire * 86400000).toISOString();
         }
+        // 收集各窗口总额度 → 组合成套餐额度说明（卡片级展示）
+        const totalsByUnit = {};
+        for (const limit of limits) {
+          if ((limit.type === 'CREDIT_LIMIT' || limit.type === 'TOKENS_LIMIT') && (limit.unit === 3 || limit.unit === 6)) {
+            const t = toNum(limit.usage);
+            if (t != null && t > 0) totalsByUnit[limit.unit] = t;
+          }
+        }
+        const quotaParts = [];
+        if (totalsByUnit[3]) quotaParts.push(`5h ${totalsByUnit[3]}`);
+        if (totalsByUnit[6]) quotaParts.push(`周 ${totalsByUnit[6]}`);
+        const planQuota = quotaParts.length > 0 ? quotaParts.join(' · ') : '';
         for (const limit of limits) {
           // 实测 type 为 CREDIT_LIMIT；兼容历史 TOKENS_LIMIT
           if ((limit.type === 'CREDIT_LIMIT' || limit.type === 'TOKENS_LIMIT') && (limit.unit === 3 || limit.unit === 6)) {
@@ -153,6 +165,7 @@ export async function collect(cfg) {
               planName: subInfo && subInfo.productName ? subInfo.productName : 'GLM Coding Plan',
               priceText: planPrice(cfg, 'zhipu'),
               price: planPriceNum(cfg, 'zhipu'),
+              quotaText: planQuota,
               percentUsed: toNum(limit.percentage),
               unit: 'used',
               resetAt: epochToISO(limit.nextResetTime),

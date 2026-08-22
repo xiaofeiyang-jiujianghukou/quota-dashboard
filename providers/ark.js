@@ -82,8 +82,18 @@ function epochToISO(ms) {
 
 async function collectHttp(cfg, p) {
   const timeoutMs = cfg.requestTimeoutMs || 30000;
-  const meta = readArkMeta(); // { expiresAt, planTier }
-  const expiryMs = meta.expiresAt;
+  const meta = readArkMeta(); // { expiresAt, planTier }（本机兜底）
+  // 会话接口优先（控制台 ListSubscribeTrade）：真实档位/到期/续费
+  let session = null;
+  if (p.sessionCookie) {
+    try {
+      session = await fetchSessionPlan(p, timeoutMs);
+    } catch {
+      session = null; // 会话失效则回退
+    }
+  }
+  const tier = (session && session.tier) || meta.planTier || '';
+  const expiryMs = (session && session.endTimeMs) || meta.expiresAt;
   const items = [];
   let statusNote = '';
 
@@ -135,9 +145,9 @@ async function collectHttp(cfg, p) {
   const planName =
     product === 'agent-plan'
       ? 'Agent Plan'
-      : `Coding Plan${meta.planTier ? ' ' + meta.planTier.toUpperCase() : ''}`;
-  const priceText = planPrice(cfg, 'ark', meta.planTier);
-  const price = planPriceNum(cfg, 'ark', meta.planTier);
+      : `Coding Plan${tier ? ' ' + tier.toUpperCase() : ''}`;
+  const priceText = planPrice(cfg, 'ark', tier);
+  const price = planPriceNum(cfg, 'ark', tier);
   for (const q of quotas) {
     const level = String(q.Level || '').toLowerCase();
     const periodLabel = PERIOD_LABELS[level] || q.Level || '';
@@ -149,7 +159,7 @@ async function collectHttp(cfg, p) {
       planName,
       priceText,
       price,
-      quotaText: planQuotaText(cfg, 'ark', meta.planTier),
+      quotaText: planQuotaText(cfg, 'ark', tier),
       percentUsed: toNum(q.Percent),
       unit: 'used',
       resetAt,
@@ -190,4 +200,49 @@ function readArkMeta() {
     /* ignore */
   }
   return out;
+}
+
+/**
+ * 控制台会话查询订阅信息（ListSubscribeTrade）：
+ * POST https://console.volcengine.com/api/top/ark/{region}/{version}/ListSubscribeTrade
+ * body: {"ResourceTypes":["CodingPlan"],"ResourceNames":[""],"BizInfos":["lite","pro"]}
+ * 返回 InfoList[0]: { BizInfo(档位), EndTime, EnableAutoRenew, Status }
+ * 失败抛错（调用方回退）
+ */
+async function fetchSessionPlan(p, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs || 15000);
+  try {
+    const region = p.region || 'cn-beijing';
+    const url = `https://console.volcengine.com/api/top/ark/${region}/2024-01-01/ListSubscribeTrade?`;
+    const body = JSON.stringify({ ResourceTypes: ['CodingPlan'], ResourceNames: [''], BizInfos: ['lite', 'pro'] });
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json, text/plain, */*',
+        'content-type': 'application/json',
+        cookie: p.sessionCookie,
+        origin: 'https://console.volcengine.com',
+        referer: `https://console.volcengine.com/ark/region:${region}/subscription/coding-plan`,
+        'x-csrf-token': p.csrfToken || '',
+        'x-web-id': p.webId || '',
+      },
+      body,
+      signal: controller.signal,
+    });
+    const json = await res.json();
+    const err = json.ResponseMetadata && json.ResponseMetadata.Error;
+    if (err) throw new Error(`[${err.Code}] ${err.Message || ''}`);
+    const info = (json.Result && json.Result.InfoList && json.Result.InfoList[0]) || null;
+    if (!info) return null;
+    const endMs = info.EndTime ? new Date(info.EndTime).getTime() : null;
+    return {
+      tier: String(info.BizInfo || '').toLowerCase() || null,
+      endTimeMs: endMs && !Number.isNaN(endMs) ? endMs : null,
+      autoRenew: info.EnableAutoRenew,
+      status: info.Status || null,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 }

@@ -8,7 +8,10 @@
       "accessKeyId": "",
       "secretKey": "",
       "region": "cn-beijing",
-      "expiresAt": ""
+      "expiresAt": "",
+      "sessionCookie": "",
+      "csrfToken": "",
+      "webId": ""
     },
     "bailian": {
       "enabled": true,

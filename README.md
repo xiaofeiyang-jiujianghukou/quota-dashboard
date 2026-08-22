@@ -58,7 +58,7 @@ node server.js
 
 密钥获取位置：
 
-- **方舟**：https://console.volcengine.com/iam/keymanage （访问控制 IAM → API 访问密钥）创建 AK/SK，填入 `ark.accessKeyId/secretKey`（`AKLT` 开头）；纯 HTTP 查 Coding/Agent Plan 配额。
+- **方舟**：https://console.volcengine.com/iam/keymanage （访问控制 IAM → API 访问密钥）创建 AK/SK（`AKLT` 开头）查配额；**可选**：配置 `ark.sessionCookie/csrfToken/webId`（控制台 F12 → ListSubscribeTrade 请求）可自动获取**真实档位/到期**，否则读本机 `~/.arkcli/config.yaml` 或手动 `expiresAt`。
 - **百炼**：https://ram.console.aliyun.com/manage/ak （RAM 访问控制 → AccessKey）创建 AccessKey，填入 `bailian.accessKeyId/accessKeySecret`（`LTAI` 开头）；纯 HTTP 查 Token Plan 周用量。
 - **智谱**：https://open.bigmodel.cn → API Keys。`apiKey` 查资源包余量；`codingPlanKey`（GLM Coding Plan 专用 Key）查 5 小时/每周配额，不填则只查资源包。
 - **MiniMax**：https://www.minimaxi.com → 账户管理 → Token Plan 页面获取**订阅 Key**（`sk-cp-` 开头，Token Plan 专用；普通 API Key 查不到套餐额度）。国内站默认 `host=https://www.minimaxi.com`；国际站改为 `https://api.minimax.io` 并换国际版订阅 Key。
