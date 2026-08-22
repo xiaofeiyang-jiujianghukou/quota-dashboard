@@ -1,0 +1,88 @@
+{
+  "port": 8899,
+  "refreshIntervalSec": 60,
+  "requestTimeoutMs": 30000,
+  "providers": {
+    "ark": {
+      "enabled": true,
+      "accessKeyId": "",
+      "secretKey": "",
+      "region": "cn-beijing",
+      "expiresAt": ""
+    },
+    "bailian": {
+      "enabled": true,
+      "accessKeyId": "",
+      "accessKeySecret": "",
+      "expiresAt": ""
+    },
+    "zhipu": {
+      "enabled": true,
+      "apiKey": "",
+      "codingPlanKey": "",
+      "expiresAt": "",
+      "sessionToken": ""
+    },
+    "minimax": {
+      "enabled": true,
+      "apiKey": "",
+      "host": "https://www.minimaxi.com",
+      "planName": "",
+      "expiresAt": "",
+      "sessionCookie": "",
+      "groupId": ""
+    },
+    "tencent": {
+      "enabled": true,
+      "secretId": "",
+      "secretKey": "",
+      "region": "ap-guangzhou",
+      "planName": "",
+      "expiresAt": ""
+    },
+    "deepseek": {
+      "enabled": true,
+      "apiKey": "",
+      "expiresAt": ""
+    }
+  },
+  "pricing": {
+    "ark": {
+      "lite": "",
+      "pro": "",
+      "default": ""
+    },
+    "bailian": {
+      "lite": "",
+      "standard": "",
+      "pro": "",
+      "default": ""
+    },
+    "zhipu": {
+      "default": ""
+    },
+    "minimax": {
+      "plus": "",
+      "max": "",
+      "ultra": "",
+      "default": ""
+    },
+    "tencent": {
+      "tp_lite": "",
+      "default": ""
+    }
+  },
+  "alert": {
+    "enabled": true,
+    "wecom": {
+      "enabled": true,
+      "chatName": ""
+    },
+    "rules": {
+      "remainingPercentBelow": 20,
+      "expiresWithinDays": 3,
+      "balanceBelow": 10
+    },
+    "dailyDigest": true
+  }
+}

@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI 套餐余量看板</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel2: #1c2330;
+    --border: #2d333b;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --green: #3fb950;
+    --amber: #d29922;
+    --red: #f85149;
+    --blue: #58a6ff;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 24px 20px 60px; }
+
+  header {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 14px;
+    margin-bottom: 20px;
+  }
+  h1 { font-size: 22px; font-weight: 700; letter-spacing: .5px; }
+  h1 .dot { color: var(--blue); }
+  .sub { color: var(--muted); font-size: 13px; }
+
+  .controls { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .controls button, .controls select {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 7px 12px; font-size: 13px; cursor: pointer;
+  }
+  .controls button:hover { border-color: var(--blue); }
+  .controls button:disabled { opacity: .5; cursor: not-allowed; }
+  .countdown { color: var(--muted); font-size: 13px; min-width: 150px; text-align: right; }
+
+  /* 状态条 */
+  .statusbar {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; font-size: 12.5px;
+  }
+  .chip {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 999px;
+    padding: 4px 12px; color: var(--muted);
+  }
+  .chip b { color: var(--text); font-weight: 600; }
+  .chip.ok b { color: var(--green); }
+  .chip.warn b { color: var(--amber); }
+  .chip.bad b { color: var(--red); }
+  .chip.total-chip { border-color: var(--blue); }
+  .chip.total-chip b { color: var(--blue); font-size: 14px; }
+  .sub-note { opacity: .75; font-size: 11px; }
+
+  /* 卡片网格 */
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    overflow: hidden; display: flex; flex-direction: column;
+  }
+  .card-head {
+    display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap;
+    padding: 12px 14px; border-bottom: 1px solid var(--border);
+  }
+  .logo {
+    width: 12px; height: 12px; border-radius: 50%; flex: none;
+    box-shadow: 0 0 8px currentColor;
+  }
+  .card-head .name { font-weight: 700; font-size: 14.5px; }
+  .card-head .badge { margin-left: 2px; }
+  .card-head .head-expiry { flex-basis: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 2px; }
+  .card-head .head-expiry .plan-chip { color: var(--blue); border-color: rgba(88,166,255,.5); }
+  .badge {
+    font-size: 11.5px; padding: 2px 9px; border-radius: 999px; border: 1px solid;
+  }
+  .badge.ok { color: var(--green); border-color: var(--green); }
+  .badge.warn { color: var(--amber); border-color: var(--amber); }
+  .badge.bad { color: var(--red); border-color: var(--red); }
+  .badge.off { color: var(--muted); border-color: var(--border); }
+
+  .errbox {
+    margin: 12px 16px 0; padding: 10px 12px; border-radius: 8px;
+    background: rgba(248,81,73,.08); border: 1px solid rgba(248,81,73,.35);
+    font-size: 12.5px; color: #ffb3ad;
+  }
+  .errbox .err-title { font-weight: 600; margin-bottom: 2px; }
+  .errbox .err-detail { color: rgba(255,179,173,.75); word-break: break-all; }
+
+  .items { padding: 6px 14px 12px; display: flex; flex-direction: column; gap: 12px; }
+  .item:first-child { margin-top: 8px; }
+
+  .item-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .item-title { font-size: 13.5px; font-weight: 600; }
+  .kind {
+    font-size: 10.5px; padding: 1px 7px; border-radius: 6px; border: 1px solid var(--border);
+    color: var(--muted); flex: none;
+  }
+  .item-extra-status { margin-left: auto; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+  .plan-line { font-size: 11.5px; color: var(--blue); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .note-line { font-size: 11.5px; color: var(--amber); margin-top: 3px; }
+
+  .bar {
+    height: 8px; border-radius: 999px; background: #21262d; overflow: hidden; margin-top: 8px;
+  }
+  .bar > div { height: 100%; border-radius: 999px; transition: width .6s ease; }
+  .bar.c-green > div { background: var(--green); }
+  .bar.c-amber > div { background: var(--amber); }
+  .bar.c-red > div { background: var(--red); }
+  .bar.c-blue > div { background: var(--blue); }
+
+  .item-stats {
+    display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px;
+    font-size: 12px; color: var(--muted);
+  }
+  .item-stats span { white-space: nowrap; }
+  .item-stats b { color: var(--text); font-weight: 600; }
+  .item-stats .strong { color: var(--blue); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip2 {
+    font-size: 11.5px; padding: 3px 9px; border-radius: 7px;
+    background: var(--panel2); border: 1px solid var(--border); color: var(--muted);
+    white-space: nowrap;
+  }
+  .chip2.soon { border-color: var(--amber); color: var(--amber); }
+  .chip2.expired { border-color: var(--red); color: var(--red); }
+  .chip2 b { font-weight: 600; }
+
+  footer { margin-top: 30px; color: var(--muted); font-size: 12px; line-height: 1.8; }
+  footer code {
+    background: var(--panel); border: 1px solid var(--border); padding: 1px 6px;
+    border-radius: 5px; font-size: 11.5px;
+  }
+
+  .empty {
+    grid-column: 1 / -1; text-align: center; color: var(--muted);
+    padding: 60px 0; border: 1px dashed var(--border); border-radius: var(--radius);
+  }
+  .more-wrap { padding: 0 16px 14px; }
+  .more-btn {
+    width: 100%; background: var(--panel2); color: var(--muted);
+    border: 1px dashed var(--border); border-radius: 8px;
+    padding: 8px; font-size: 12.5px; cursor: pointer;
+  }
+  .more-btn:hover { color: var(--text); border-color: var(--blue); }
+  .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: sp 1s linear infinite; vertical-align: -2px; margin-right: 6px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+
+  /* 微信提醒设置弹窗 */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.62); display: flex; align-items: center; justify-content: center; z-index: 50; }
+  .modal.hidden { display: none; }
+  .modal-box { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px 24px; width: min(460px, 92vw); max-height: 88vh; overflow: auto; }
+  .modal-box h3 { margin-bottom: 12px; font-size: 16px; }
+  .modal-box .state { font-size: 13.5px; margin-bottom: 10px; color: var(--muted); line-height: 1.7; }
+  #wecomQrWrap { text-align: center; margin: 10px 0 4px; }
+  #wecomQr { width: 236px; height: 236px; image-rendering: pixelated; border-radius: 8px; background: #fff; padding: 10px; }
+  .qr-tip { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .modal-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .modal-actions button { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; }
+  .modal-actions button:hover { border-color: var(--blue); }
+  .modal-actions button.primary { border-color: var(--blue); color: var(--blue); }
+  .modal-actions button.hidden, .hidden { display: none; }
+  .wecom-msg { margin-top: 10px; font-size: 12.5px; color: var(--amber); min-height: 18px; }
+  .modal-note { margin-top: 12px; font-size: 11.5px; color: var(--muted); border-top: 1px dashed var(--border); padding-top: 10px; line-height: 1.8; }
+
+  @media (max-width: 760px) {
+    .grid { grid-template-columns: 1fr; }
+    .controls { margin-left: 0; width: 100%; justify-content: space-between; }
+    .countdown { text-align: left; min-width: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1><span class="dot">●</span> AI 套餐余量看板</h1>
+      <div class="sub">百炼 · 方舟 · 智谱 · MiniMax · 混元 — 实时余量 & 到期时间</div>
+    </div>
+    <div class="controls">
+      <span class="countdown" id="countdown"></span>
+      <select id="interval" title="自动刷新间隔">
+        <option value="30">30 秒</option>
+        <option value="60" selected>60 秒</option>
+        <option value="120">2 分钟</option>
+        <option value="300">5 分钟</option>
+        <option value="600">10 分钟</option>
+      </select>
+      <button id="wecomBtn" title="微信提醒扫码授权与测试">🔔 微信提醒</button>
+      <button id="refreshBtn">立即刷新</button>
+    </div>
+  </header>
+
+  <div class="statusbar" id="statusbar"></div>
+  <div class="grid" id="grid"></div>
+
+  <!-- 微信提醒设置弹窗 -->
+  <div id="wecomModal" class="modal hidden">
+    <div class="modal-box">
+      <h3>🔔 微信提醒设置</h3>
+      <div class="state" id="wecomState">加载中…</div>
+      <div id="wecomQrWrap" class="hidden">
+        <img id="wecomQr" src="" alt="企业微信授权二维码" />
+        <div class="qr-tip">用手机 <b>企业微信 App</b> 扫一扫，扫码后在手机上点「确认」<br/>（个人微信不支持；无企业微信可先在 work.weixin.qq.com 用微信开通）</div>
+      </div>
+      <div class="modal-actions">
+        <button id="wecomInitBtn" class="primary">扫码授权</button>
+        <button id="wecomTestBtn" class="hidden">发送测试消息</button>
+        <button id="wecomCancelBtn" class="hidden">取消</button>
+        <button id="wecomCloseBtn">关闭</button>
+      </div>
+      <div class="wecom-msg" id="wecomMsg"></div>
+      <div class="modal-note">
+        提醒规则（余量 &lt;20% / 到期 ≤3 天 / 余额 &lt;¥10 / 每日汇总）在 <code>config.json</code> 的 <code>alert</code> 段调整；
+        接收人 <code>alert.wecom.chatName</code> 留空 = 发给自己（授权人），填群名 = 发到最近会话中的同名群。
+      </div>
+    </div>
+  </div>
+  <footer id="footer"></footer>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const nf = new Intl.NumberFormat('zh-CN');
+const nfCompact = new Intl.NumberFormat('zh-CN', { notation: 'compact', maximumFractionDigits: 2 });
+
+let state = null;        // 最近一次 /api/quota 数据
+let statusInfo = null;   // /api/status
+let nextRefreshAt = 0;   // 下次自动刷新时间戳
+const expanded = new Set(); // 已展开全部条目的提供商
+const COLLAPSE_AT = 6;      // 默认每个卡片显示条数
+
+function fmtNum(v) {
+  if (v == null) return '—';
+  return Math.abs(v) >= 100000 ? nfCompact.format(v) : nf.format(v);
+}
+
+function fmtUnit(u) {
+  if (!u || u === 'used') return '';
+  return u;
+}
+
+function barClass(pct) {
+  if (pct == null) return 'c-blue';
+  if (pct >= 60) return 'c-green';
+  if (pct >= 20) return 'c-amber';
+  return 'c-red';
+}
+
+function countdownText(iso, opts = {}) {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return null;
+  const now = Date.now();
+  const diff = t - now;
+  const past = diff <= 0;
+  const abs = Math.abs(diff);
+  const s = Math.floor(abs / 1000);
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  let txt;
+  if (d > 0) txt = `${d}天${h}小时`;
+  else if (h > 0) txt = `${h}小时${m}分`;
+  else txt = `${Math.max(m, 1)}分钟`;
+  const lead = opts.prefix || '';
+  if (past) return { text: lead + '已到期 ' + (opts.short ? txt : ''), expired: true };
+  return { text: lead + txt + (opts.suffix || ''), expired: false };
+}
+
+function isoShort(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function providerColor(id) {
+  return {
+    ark: '#e25555',       // 火山红
+    bailian: '#ff7a45',   // 阿里橙
+    zhipu: '#8b5cf6',     // 智谱紫
+    minimax: '#2ecc71',   // 绿
+    tencent: '#5b8def',   // 腾讯蓝
+    deepseek: '#536dfe',  // DeepSeek 蓝
+  }[id] || '#58a6ff';
+}
+
+function badgeFor(pv) {
+  if (pv.skipped) return { cls: 'off', txt: '未启用' };
+  if (pv.ok && pv.items.length) return { cls: 'ok', txt: '正常' };
+  if (pv.items.length) return { cls: 'warn', txt: '部分数据' };
+  return { cls: 'bad', txt: '失败' };
+}
+
+function renderItem(item, accent) {
+  // info 类型：渲染为一行紧凑的灰色提示（无进度条/统计），避免占垂直空间
+  if (item.kind === 'info') {
+    const note = item.extra && item.extra.note ? item.extra.note : '';
+    const el = document.createElement('div');
+    el.className = 'item';
+    el.innerHTML = `
+      <div class="item-top" style="margin:0">
+        <span class="item-title" style="font-size:12.5px;color:var(--muted)">${escapeHtml(item.title)}</span>
+        ${note ? `<span class="item-extra-status" style="margin-left:8px">${escapeHtml(note)}</span>` : ''}
+      </div>`;
+    return el;
+  }
+  // 进度条统一按"剩余比例"填充（满格=健康绿色）：
+  //   remainingPercent → 直接用；total+remaining → 推算；只有 percentUsed → 100-已用
+  const remPct =
+    item.remainingPercent != null
+      ? item.remainingPercent
+      : item.total && item.remaining != null
+        ? (item.remaining / item.total) * 100
+        : item.percentUsed != null
+          ? 100 - item.percentUsed
+          : null;
+  const barW = remPct != null ? remPct : 0;
+  const barColorPct = remPct;
+  // 余额/无比例数据不画进度条
+  const barHtml =
+    remPct != null || item.percentUsed != null
+      ? `<div class="bar ${barClass(barColorPct)}"><div style="width:${Math.min(100, Math.max(0, barW))}%"></div></div>`
+      : '';
+  const el = document.createElement('div');
+  el.className = 'item';
+
+  const extraStatus = item.extra && (item.extra.status || item.extra.stopReason)
+    ? (item.extra.status || '') + (item.extra.stopReason ? (item.extra.status ? ' · ' : '') + item.extra.stopReason : '')
+    : '';
+  const extraNote = item.extra && item.extra.note ? item.extra.note : '';
+
+  let statsHtml = '';
+  const unit = fmtUnit(item.unit);
+  // 主数字：剩余百分比（与进度条一致）
+  if (remPct != null) {
+    statsHtml += `<span>剩余 <b class="strong">${remPct.toFixed(0)}%</b></span>`;
+  }
+  if (item.extra && item.extra.weeklyRemainingPercent != null) {
+    statsHtml += `<span>本周剩余 <b>${item.extra.weeklyRemainingPercent.toFixed(0)}%</b></span>`;
+  }
+  // 辅助：绝对值（剩余/总量）
+  if (item.total != null || item.remaining != null) {
+    const absParts = [];
+    if (item.remaining != null) absParts.push(fmtNum(item.remaining));
+    if (item.total != null) absParts.push(fmtNum(item.total));
+    statsHtml += `<span>${item.remaining != null ? '剩余' : '总量'} <b>${absParts.join(' / ')}</b>${unit ? ' ' + unit : ''}</span>`;
+  }
+  // 已用绝对值仅在无百分比时展示（避免与剩余%重复）
+  if (item.used != null && item.percentUsed == null) {
+    statsHtml += `<span>已用 <b>${fmtNum(item.used)}</b>${unit ? ' ' + unit : ''}</span>`;
+  }
+  const ex1 = item.extra || {};
+  if (ex1.cycleUsage && ex1.cycleUsage.total != null) {
+    statsHtml += `<span>本周期 <b>${fmtNum(ex1.cycleUsage.total)}</b> token</span>`;
+  }
+  if (ex1.todayUsage && ex1.todayUsage.total != null) {
+    statsHtml += `<span>今日 <b>${fmtNum(ex1.todayUsage.total)}</b> token</span>`;
+  }
+
+  let chips = '';
+  const chip = (kind, iso, label) => `<span class="chip2" data-count="${kind}|${iso}|${label}">${label}: <b>${isoShort(iso)}</b></span>`;
+  if (item.resetAt) chips += chip('reset', item.resetAt, item.resetLabel || '刷新/重置');
+  const ex0 = item.extra || {};
+  if (ex0.weeklyResetAt) chips += chip('week', ex0.weeklyResetAt, '周重置');
+  if (ex0.periodEnd) chips += chip('period', ex0.periodEnd, '周期重置');
+  if (!item.resetAt && ex0.resetHint) {
+    chips += `<span class="chip2" title="${escapeHtml(ex0.resetHint)}">重置：未使用</span>`;
+  }
+
+  el.innerHTML = `
+    <div class="item-top">
+      <span class="item-title">${escapeHtml(item.title)}</span>
+      <span class="kind">${escapeHtml(kindLabel(item.kind))}</span>
+      ${extraStatus ? `<span class="item-extra-status">${escapeHtml(extraStatus)}</span>` : ''}
+    </div>
+    ${extraNote ? `<div class="note-line">${escapeHtml(extraNote)}</div>` : ''}
+    ${barHtml}
+    <div class="item-stats">${statsHtml || '<span>额度信息以平台为准</span>'}</div>
+    ${chips ? `<div class="chips">${chips}</div>` : ''}
+  `;
+  return el;
+}
+
+function kindLabel(k) {
+  return {
+    plan: '套餐', 'free-tier': '免费额度', package: '资源包', pool: '额度池', balance: '余额', info: '信息',
+  }[k] || k || '';
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
+function computeMonthlyTotal(state) {
+  // 每月订阅总金额：按平台去重求和（同一套餐多个条目只计一次），不含充值（DeepSeek 无 price）
+  const byProvider = {};
+  const names = {};
+  for (const pv of state.providers) {
+    if (!pv.items) continue;
+    for (const it of pv.items) {
+      if (typeof it.price === 'number' && it.price > 0) {
+        byProvider[pv.id] = it.price;
+        names[pv.id] = pv.name;
+      }
+    }
+  }
+  const total = Object.values(byProvider).reduce((s, v) => s + v, 0);
+  const breakdown = Object.entries(byProvider).map(([id, v]) => `${names[id]} ¥${v}`).join(' + ');
+  return { total, title: breakdown ? `${breakdown} = ¥${total}/月（不含充值）` : '暂无订阅价格数据' };
+}
+
+function render() {
+  const grid = $('grid');
+  const sb = $('statusbar');
+  if (!state) {
+    grid.innerHTML = `<div class="empty"><span class="spin"></span>正在采集各平台数据…</div>`;
+    return;
+  }
+
+  // 状态条
+  const total = state.providers.length;
+  const ok = state.providers.filter((p) => p.ok).length;
+  const partial = state.providers.filter((p) => !p.ok && p.items.length).length;
+  const bad = state.providers.filter((p) => !p.ok && !p.skipped && !p.items.length).length;
+  const off = state.providers.filter((p) => p.skipped).length;
+  let chips = `<span class="chip">采集耗时 <b>${state.elapsedMs}ms</b> · 更新于 <b>${isoShort(state.fetchedAt)}</b></span>`;
+  if (statusInfo && statusInfo.providers) {
+    for (const [pid, st] of Object.entries(statusInfo.providers)) {
+      // 所有提供商统一：启用且已配置（密钥/AK-SK）才标记"已配置"
+      const okFlag = st.enabled && !!st.configured;
+      chips += `<span class="chip ${okFlag ? 'ok' : 'warn'}">${escapeHtml(providerName(pid))} <b>${okFlag ? '已配置' : '待配置密钥'}</b></span>`;
+    }
+  } else {
+    chips += `<span class="chip ok">正常 <b>${ok}</b></span><span class="chip warn">部分 <b>${partial}</b></span><span class="chip bad">失败 <b>${bad}</b></span><span class="chip">未启用 <b>${off}</b></span>`;
+  }
+  // 每月订阅合计（置顶突出）
+  const sub = computeMonthlyTotal(state);
+  chips =
+    `<span class="chip total-chip" title="${escapeHtml(sub.title)}">💰 每月订阅合计 <b>¥${sub.total}</b><span class="sub-note">/月 · 不含充值</span></span>` +
+    chips;
+  if (statusInfo && statusInfo.alert) {
+    const al = statusInfo.alert;
+    const r = al.rules || {};
+    const txt = al.enabled
+      ? `提醒已开 · 余量<${r.remainingPercentBelow ?? '-'}% / 到期≤${r.expiresWithinDays ?? '-'}天`
+      : '提醒未开启';
+    chips += `<span class="chip ${al.enabled ? 'ok' : ''}">🔔 ${escapeHtml(txt)}</span>`;
+  }
+  sb.innerHTML = chips;
+
+  // 卡片
+  grid.innerHTML = '';
+  const cards = state.providers.filter((p) => !p.skipped || p.items.length);
+  if (cards.length === 0) {
+    grid.innerHTML = `<div class="empty">没有启用任何提供商，请检查 config.json</div>`;
+    return;
+  }
+  for (const pv of cards) {
+    const b = badgeFor(pv);
+    const card = document.createElement('div');
+    card.className = 'card';
+    const accent = providerColor(pv.id);
+    // 套餐信息（档位+价格）与到期时间：均为卡片级，公共信息只显示一次
+    const cardPlanItem = (pv.items || []).find((it) => it.planName || it.priceText);
+    const cardPlanInfo = cardPlanItem
+      ? [cardPlanItem.planName, cardPlanItem.priceText].filter(Boolean).join(' · ')
+      : '';
+    const cardExpiryItem = (pv.items || []).find((it) => it.expiresAt);
+    const headChips =
+      (cardPlanInfo ? `<span class="chip2 plan-chip">📦 ${escapeHtml(cardPlanInfo)}</span>` : '') +
+      (cardExpiryItem
+        ? `<span class="chip2" data-count="expire|${cardExpiryItem.expiresAt}|到期">到期: <b>${isoShort(cardExpiryItem.expiresAt)}</b></span>`
+        : '');
+    let errHtml = '';
+    if (!pv.ok) {
+      errHtml = `<div class="errbox"><div class="err-title">${escapeHtml(pv.error || '采集失败')}</div>${pv.detail ? `<div class="err-detail">${escapeHtml(pv.detail)}</div>` : ''}</div>`;
+    }
+    let itemsHtml = '';
+    if (pv.items.length) {
+      const all = expanded.has(pv.id);
+      const visible = all ? pv.items : pv.items.slice(0, COLLAPSE_AT);
+      const hidden = pv.items.length - visible.length;
+      itemsHtml = `<div class="items">${visible.map((it) => renderItem(it, accent).outerHTML).join('')}</div>`;
+      if (hidden > 0) {
+        itemsHtml += `<div class="more-wrap"><button class="more-btn" data-pid="${escapeHtml(pv.id)}">展开全部 ${pv.items.length} 条（还有 ${hidden} 条）</button></div>`;
+      } else if (all && pv.items.length > COLLAPSE_AT) {
+        itemsHtml += `<div class="more-wrap"><button class="more-btn" data-pid="${escapeHtml(pv.id)}">收起</button></div>`;
+      }
+    } else if (pv.ok) {
+      itemsHtml = `<div class="items"><div class="item item-top" style="color:var(--muted);font-size:12.5px">暂无额度条目</div></div>`;
+    }
+    card.innerHTML = `
+      <div class="card-head">
+        <span class="logo" style="color:${accent};background:${accent}"></span>
+        <span class="name">${escapeHtml(pv.name)}</span>
+        <span class="badge ${b.cls}">${b.txt}</span>
+        ${headChips ? `<span class="head-expiry">${headChips}</span>` : ''}
+      </div>
+      ${errHtml}
+      ${itemsHtml}
+    `;
+    grid.appendChild(card);
+  }
+  tick();
+}
+
+function providerName(pid) {
+  return { ark: '方舟', bailian: '百炼', zhipu: '智谱', minimax: 'MiniMax', tencent: '混元', deepseek: 'DeepSeek' }[pid] || pid;
+}
+
+function tick() {
+  // 更新所有倒计时 chip：具体日期 + 剩余倒计时 同时显示
+  document.querySelectorAll('.chip2[data-count]').forEach((el) => {
+    const parts = el.dataset.count.split('|');
+    const kind = parts[0];
+    const iso = parts[1];
+    const label = parts[2] || '';
+    const r = countdownText(iso, { prefix: '', short: true });
+    if (!r) return;
+    const isExpire = kind === 'expire';
+    const lbl = label || (isExpire ? '到期' : '刷新/重置');
+    const days = (new Date(iso).getTime() - Date.now()) / 86400000;
+    const cd = r.expired ? '已到期' : `还有 ${r.text}`;
+    el.innerHTML = `${lbl}: <b>${isoShort(iso)}</b>（${cd}）`;
+    el.className = 'chip2' + (r.expired ? ' expired' : isExpire && days <= 7 ? ' soon' : '');
+  });
+
+  // 下次自动刷新倒计时
+  const cd = $('countdown');
+  if (nextRefreshAt > 0) {
+    const s = Math.max(0, Math.ceil((nextRefreshAt - Date.now()) / 1000));
+    cd.textContent = `${s}s 后自动刷新`;
+  } else {
+    cd.textContent = '';
+  }
+}
+
+async function fetchQuota(force) {
+  const btn = $('refreshBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>刷新中';
+  try {
+    const url = force ? '/api/quota?force=1' : '/api/quota';
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    state = await res.json();
+    render();
+  } catch (e) {
+    $('grid').innerHTML = `<div class="empty">请求失败：${escapeHtml(e.message)}<br/>请确认服务已启动（node server.js）</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '立即刷新';
+  }
+}
+
+async function fetchStatus() {
+  try {
+    const res = await fetch('/api/status');
+    statusInfo = await res.json();
+  } catch { /* ignore */ }
+}
+
+function armTimer() {
+  const sec = Number($('interval').value);
+  nextRefreshAt = Date.now() + sec * 1000;
+  setTimeout(() => {
+    fetchQuota(true);
+    armTimer();
+  }, sec * 1000);
+}
+
+$('refreshBtn').addEventListener('click', () => {
+  nextRefreshAt = Date.now() + Number($('interval').value) * 1000;
+  fetchQuota(true);
+});
+$('interval').addEventListener('change', () => {
+  nextRefreshAt = Date.now() + Number($('interval').value) * 1000;
+});
+
+// 展开/收起提供商卡片内的条目
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.more-btn');
+  if (!btn) return;
+  const pid = btn.dataset.pid;
+  if (expanded.has(pid)) expanded.delete(pid);
+  else expanded.add(pid);
+  render();
+});
+
+// ---- 微信提醒设置面板 ----
+const wm = {
+  modal: $('wecomModal'), state: $('wecomState'), qrWrap: $('wecomQrWrap'), qr: $('wecomQr'),
+  initBtn: $('wecomInitBtn'), testBtn: $('wecomTestBtn'), cancelBtn: $('wecomCancelBtn'),
+  closeBtn: $('wecomCloseBtn'), msg: $('wecomMsg'),
+};
+let wecomPoll = null;
+
+async function refreshWecomPanel() {
+  let s;
+  try {
+    s = await (await fetch('/api/wecom/status')).json();
+  } catch {
+    return;
+  }
+  if (!s.installed) {
+    wm.state.innerHTML = '状态：<b style="color:var(--amber)">未安装 wecom-cli</b>，点「扫码授权」会自动安装（或手动执行 npm install -g @wecom/cli）';
+  } else if (s.authorized) {
+    wm.state.innerHTML = `状态：<b style="color:var(--green)">已授权</b>${s.botName ? ' · 机器人「' + escapeHtml(s.botName) + '」' : ''}，微信提醒已可推送`;
+  } else {
+    wm.state.innerHTML = '状态：<b style="color:var(--amber)">未授权</b> —— 点「扫码授权」，用企业微信扫一次（长期有效）';
+  }
+  wm.initBtn.classList.toggle('hidden', !!s.authorized);
+  wm.testBtn.classList.toggle('hidden', !s.authorized);
+  wm.cancelBtn.classList.toggle('hidden', !s.flowRunning);
+  if (s.flowRunning && s.qrReady) {
+    wm.qr.src = s.qrUrl + '?t=' + Date.now();
+    wm.qrWrap.classList.remove('hidden');
+    if (s.authorized) {
+      stopWecomPoll();
+      wm.msg.textContent = '🎉 授权成功！提醒通道已打通';
+      fetchStatus();
+    }
+  } else if (!s.flowRunning) {
+    wm.qrWrap.classList.add('hidden');
+  }
+}
+function stopWecomPoll() {
+  if (wecomPoll) {
+    clearInterval(wecomPoll);
+    wecomPoll = null;
+  }
+}
+wm.closeBtn.addEventListener('click', () => {
+  wm.modal.classList.add('hidden');
+  stopWecomPoll();
+});
+wm.initBtn.addEventListener('click', async () => {
+  wm.msg.textContent = '正在准备二维码…';
+  const r = await (await fetch('/api/wecom/init', { method: 'POST' })).json();
+  if (!r.ok) {
+    wm.msg.textContent = '❌ ' + (r.error || '启动授权失败');
+    return;
+  }
+  await refreshWecomPanel();
+  stopWecomPoll();
+  wecomPoll = setInterval(refreshWecomPanel, 3000);
+});
+wm.cancelBtn.addEventListener('click', async () => {
+  await fetch('/api/wecom/cancel', { method: 'POST' });
+  stopWecomPoll();
+  await refreshWecomPanel();
+  wm.msg.textContent = '已取消授权。';
+});
+wm.testBtn.addEventListener('click', async () => {
+  wm.msg.textContent = '发送中…';
+  const r = await (await fetch('/api/wecom/test', { method: 'POST' })).json();
+  wm.msg.textContent = r.ok ? '✅ 测试消息已发送，请查看企业微信' : '❌ ' + (r.error || '发送失败');
+});
+$('wecomBtn').addEventListener('click', async () => {
+  wm.modal.classList.remove('hidden');
+  wm.msg.textContent = '';
+  await refreshWecomPanel();
+});
+
+// 每秒刷新倒计时展示
+setInterval(tick, 1000);
+
+(async function init() {
+  $('footer').innerHTML = `密钥配置：<code>quota-dashboard/config.json</code>（仅本机 127.0.0.1 可访问，密钥不会回传到页面） · 六家平台均为<b>纯 HTTP + 密钥</b>查询，无需安装任何 AI 平台客户端 · 微信提醒经 <code>wecom-cli</code>（企业微信机器人）`;
+  await fetchStatus();
+  render();
+  await fetchQuota(false);
+  armTimer();
+})();
+</script>
+</body>
+</html>

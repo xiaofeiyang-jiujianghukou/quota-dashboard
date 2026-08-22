@@ -1,0 +1,16 @@
+{
+  "name": "quota-dashboard",
+  "version": "1.0.0",
+  "description": "AI 套餐余量看板：聚合展示百炼 / 方舟 / 智谱 / MiniMax / 混元(TokenHub) 的套餐余量与到期时间",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && for f in lib/*.js providers/*.js; do node --check \"$f\" || exit 1; done"
+  },
+  "dependencies": {},
+  "license": "MIT"
+}
