@@ -478,12 +478,15 @@ function render() {
     const accent = providerColor(pv.id);
     // 套餐信息（档位+价格）与到期时间：均为卡片级，公共信息只显示一次
     const cardPlanItem = (pv.items || []).find((it) => it.planName || it.priceText || it.quotaText);
-    const cardPlanInfo = cardPlanItem
-      ? [cardPlanItem.planName, cardPlanItem.priceText, cardPlanItem.quotaText].filter(Boolean).join(' · ')
+    // 套餐信息分两行：第 1 行 档位·价格；第 2 行 额度水平
+    const cardPlanLine = cardPlanItem && (cardPlanItem.planName || cardPlanItem.priceText)
+      ? [cardPlanItem.planName, cardPlanItem.priceText].filter(Boolean).join(' · ')
       : '';
+    const cardQuotaLine = cardPlanItem && cardPlanItem.quotaText ? cardPlanItem.quotaText : '';
     const cardExpiryItem = (pv.items || []).find((it) => it.expiresAt);
     const headChips =
-      (cardPlanInfo ? `<span class="chip2 plan-chip">📦 ${escapeHtml(cardPlanInfo)}</span>` : '') +
+      (cardPlanLine ? `<span class="chip2 plan-chip">📦 ${escapeHtml(cardPlanLine)}</span>` : '') +
+      (cardQuotaLine ? `<span class="chip2 plan-chip">额度：${escapeHtml(cardQuotaLine)}</span>` : '') +
       (cardExpiryItem
         ? `<span class="chip2" data-count="expire|${cardExpiryItem.expiresAt}|到期">到期: <b>${isoShort(cardExpiryItem.expiresAt)}</b></span>`
         : '');
