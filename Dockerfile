@@ -2,6 +2,10 @@
 # 基础镜像用 debian-slim（wecom-cli 的 linux-x64 二进制是 glibc，alpine/musl 跑不了）
 FROM node:22-bookworm-slim
 
+# wecom-cli（Rust 二进制）需要系统 CA 证书，否则 TLS 初始化直接 panic
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # 微信提醒所需的 wecom-cli（企业微信机器人通道）；装失败不影响看板主体

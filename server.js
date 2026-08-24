@@ -6,6 +6,7 @@ import { loadConfig, providerStatus, ROOT_DIR } from './lib/config.js';
 import { collectAll } from './lib/runner.js';
 import { evaluateAlerts, alertStatus } from './lib/alert.js';
 import * as wecom from './lib/wecom.js';
+import { authStatus, updateAuth } from './lib/auth.js';
 
 let cfg = loadConfig(); // 每次采集/状态查询前会热加载，改 config.json 无需重启
 const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
@@ -117,10 +118,36 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, { ok: true });
       return;
     }
+    if (req.method === 'POST' && pathname === '/api/wecom/re-auth') {
+      try {
+        sendJson(res, 200, await wecom.reAuth(PUBLIC_DIR));
+      } catch (e) {
+        sendJson(res, 200, { ok: false, error: e.message });
+      }
+      return;
+    }
     if (req.method === 'POST' && pathname === '/api/wecom/test') {
       try {
         cfg = loadConfig();
         sendJson(res, 200, await wecom.sendTestMessage(cfg));
+      } catch (e) {
+        sendJson(res, 200, { ok: false, error: e.message });
+      }
+      return;
+    }
+    if (req.method === 'GET' && pathname === '/api/auth/status') {
+      cfg = loadConfig();
+      sendJson(res, 200, authStatus(cfg));
+      return;
+    }
+    if (req.method === 'POST' && pathname === '/api/auth/update') {
+      try {
+        cfg = loadConfig();
+        let body = '';
+        for await (const chunk of req) body += chunk;
+        const { providerId, fields } = JSON.parse(body || '{}');
+        const r = updateAuth(cfg, providerId, fields);
+        sendJson(res, 200, { ...r, status: authStatus(loadConfig()) });
       } catch (e) {
         sendJson(res, 200, { ok: false, error: e.message });
       }

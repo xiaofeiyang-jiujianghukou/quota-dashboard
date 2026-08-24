@@ -59,6 +59,8 @@
   .chip.total-chip { border-color: var(--blue); }
   .chip.total-chip b { color: var(--blue); font-size: 14px; }
   .sub-note { opacity: .75; font-size: 11px; }
+  .alert-chip { flex-basis: 100%; color: var(--amber); border-color: var(--amber); }
+  .alert-chip::before { content: ''; }
 
   /* 卡片网格 */
   .grid {
@@ -172,6 +174,29 @@
   .modal-actions button.primary { border-color: var(--blue); color: var(--blue); }
   .modal-actions button.hidden, .hidden { display: none; }
   .wecom-msg { margin-top: 10px; font-size: 12.5px; color: var(--amber); min-height: 18px; }
+
+  /* 鉴权面板 */
+  .auth-btn { background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); cursor: pointer; padding: 1px 7px; font-size: 12px; line-height: 1.6; }
+  .auth-btn:hover { border-color: var(--blue); color: var(--blue); }
+  .auth-box { width: min(580px, 94vw); max-height: 86vh; overflow: auto; }
+  .auth-tip { font-size: 12px; color: var(--muted); margin-bottom: 12px; line-height: 1.7; }
+  .auth-sec { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; background: var(--panel2); }
+  .auth-sec.active { border-color: var(--blue); }
+  .auth-sec-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .auth-pname { font-weight: 700; font-size: 14px; }
+  .auth-method { font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--blue); color: var(--blue); }
+  .auth-note { font-size: 11px; color: var(--muted); margin-bottom: 10px; line-height: 1.6; }
+  .auth-field { margin-bottom: 10px; }
+  .auth-field-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+  .auth-label em { font-style: normal; color: var(--muted); }
+  .auth-label em.ok { color: var(--green); }
+  .auth-type { color: var(--muted); }
+  .auth-input-row { display: flex; gap: 6px; }
+  .auth-input-row input { flex: 1; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 6px 8px; font-size: 12px; }
+  .auth-input-row input:focus { outline: none; border-color: var(--blue); }
+  .auth-save { background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 6px 14px; font-size: 12px; cursor: pointer; flex: none; }
+  .auth-save:hover { border-color: var(--blue); color: var(--blue); }
+  .auth-msg { font-size: 12px; color: var(--amber); min-height: 16px; margin-top: 2px; }
   .modal-note { margin-top: 12px; font-size: 11.5px; color: var(--muted); border-top: 1px dashed var(--border); padding-top: 10px; line-height: 1.8; }
 
   @media (max-width: 760px) {
@@ -217,6 +242,7 @@
       <div class="modal-actions">
         <button id="wecomInitBtn" class="primary">扫码授权</button>
         <button id="wecomTestBtn" class="hidden">发送测试消息</button>
+        <button id="wecomReAuthBtn" class="hidden">重新授权</button>
         <button id="wecomCancelBtn" class="hidden">取消</button>
         <button id="wecomCloseBtn">关闭</button>
       </div>
@@ -225,6 +251,15 @@
         提醒规则（余量 &lt;20% / 到期 ≤3 天 / 余额 &lt;¥10 / 每日汇总）在 <code>config.json</code> 的 <code>alert</code> 段调整；
         接收人 <code>alert.wecom.chatName</code> 留空 = 发给自己（授权人），填群名 = 发到最近会话中的同名群。
       </div>
+    </div>
+  </div>
+  <!-- 鉴权设置弹窗 -->
+  <div id="authModal" class="modal hidden">
+    <div class="modal-box auth-box">
+      <h3>🔐 供应商鉴权</h3>
+      <div class="auth-tip">填写各平台的密钥 / 会话 Cookie，保存后<b>立即生效</b>（写入 config.json，热加载）。<br/>🔑 密钥长期有效；🍪 会话 Cookie 会过期，失效时在对应卡片重新抓取更新即可。</div>
+      <div id="authList"></div>
+      <div class="modal-actions"><button id="authCloseBtn">关闭</button></div>
     </div>
   </div>
   <footer id="footer"></footer>
@@ -452,17 +487,19 @@ function render() {
   // 每月订阅合计（置顶突出）
   const sub = computeMonthlyTotal(state);
   chips =
-    `<span class="chip total-chip" title="${escapeHtml(sub.title)}">💰 每月订阅合计 <b>¥${sub.total}</b><span class="sub-note">/月 · 不含充值</span></span>` +
+    `<span class="chip total-chip" title="${escapeHtml(sub.title)}">💰 每月订阅合计 <b>¥${sub.total}</b><span class="sub-note">/月·不含平台费</span></span>` +
     chips;
   if (statusInfo && statusInfo.alert) {
     const al = statusInfo.alert;
     const r = al.rules || {};
     const txt = al.enabled
-      ? `提醒已开 · 余量<${r.remainingPercentBelow ?? '-'}% / 到期≤${r.expiresWithinDays ?? '-'}天`
+      ? `提醒已开　余量<${r.remainingPercentBelow ?? '-'}% / 到期<${r.expiresWithinDays ?? '-'}天`
       : '提醒未开启';
-    chips += `<span class="chip ${al.enabled ? 'ok' : ''}">🔔 ${escapeHtml(txt)}</span>`;
+    // 参考样式的提醒行：独立成行、警示色
+    sb.innerHTML = chips + `<span class="chip ${al.enabled ? 'alert-chip' : ''}">⚠️ ${escapeHtml(txt)}</span>`;
+  } else {
+    sb.innerHTML = chips;
   }
-  sb.innerHTML = chips;
 
   // 卡片
   grid.innerHTML = '';
@@ -512,6 +549,7 @@ function render() {
       <div class="card-head">
         <span class="logo" style="color:${accent};background:${accent}"></span>
         <span class="name">${escapeHtml(pv.name)}</span>
+        <button class="auth-btn" data-pid="${escapeHtml(pv.id)}" title="鉴权设置（密钥/Cookie）">🔐</button>
         <span class="badge ${b.cls}">${b.txt}</span>
         ${headChips ? `<span class="head-expiry">${headChips}</span>` : ''}
       </div>
@@ -609,7 +647,7 @@ document.addEventListener('click', (e) => {
 // ---- 微信提醒设置面板 ----
 const wm = {
   modal: $('wecomModal'), state: $('wecomState'), qrWrap: $('wecomQrWrap'), qr: $('wecomQr'),
-  initBtn: $('wecomInitBtn'), testBtn: $('wecomTestBtn'), cancelBtn: $('wecomCancelBtn'),
+  initBtn: $('wecomInitBtn'), testBtn: $('wecomTestBtn'), reAuthBtn: $('wecomReAuthBtn'), cancelBtn: $('wecomCancelBtn'),
   closeBtn: $('wecomCloseBtn'), msg: $('wecomMsg'),
 };
 let wecomPoll = null;
@@ -630,6 +668,7 @@ async function refreshWecomPanel() {
   }
   wm.initBtn.classList.toggle('hidden', !!s.authorized);
   wm.testBtn.classList.toggle('hidden', !s.authorized);
+  wm.reAuthBtn.classList.toggle('hidden', !s.authorized);
   wm.cancelBtn.classList.toggle('hidden', !s.flowRunning);
   if (s.flowRunning && s.qrReady) {
     wm.qr.src = s.qrUrl + '?t=' + Date.now();
@@ -670,6 +709,15 @@ wm.cancelBtn.addEventListener('click', async () => {
   await refreshWecomPanel();
   wm.msg.textContent = '已取消授权。';
 });
+wm.reAuthBtn.addEventListener('click', async () => {
+  if (!confirm('重新授权将清除当前企业微信绑定并生成新二维码，确定继续？')) return;
+  stopWecomPoll();
+  wm.msg.textContent = '正在清除旧授权并生成新二维码…';
+  const r = await (await fetch('/api/wecom/re-auth', { method: 'POST' })).json();
+  if (!r.ok) { wm.msg.textContent = '❌ ' + (r.error || '重新授权失败'); return; }
+  await refreshWecomPanel();
+  wecomPoll = setInterval(refreshWecomPanel, 3000);
+});
 wm.testBtn.addEventListener('click', async () => {
   wm.msg.textContent = '发送中…';
   const r = await (await fetch('/api/wecom/test', { method: 'POST' })).json();
@@ -679,6 +727,94 @@ $('wecomBtn').addEventListener('click', async () => {
   wm.modal.classList.remove('hidden');
   wm.msg.textContent = '';
   await refreshWecomPanel();
+});
+
+// ---- 鉴权面板（卡片头部 🔐 按钮）----
+async function renderAuth(highlightPid) {
+  let s;
+  try {
+    s = await (await fetch('/api/auth/status')).json();
+  } catch {
+    return;
+  }
+  const list = $('authList');
+  list.innerHTML = '';
+  for (const [pid, pv] of Object.entries(s)) {
+    const sec = document.createElement('div');
+    sec.className = 'auth-sec' + (pid === highlightPid ? ' active' : '');
+    sec.id = 'auth-' + pid;
+    const rows = pv.fields.map((f) => `
+      <div class="auth-field">
+        <div class="auth-field-head">
+          <span class="auth-label">${escapeHtml(f.label)} <em class="${f.configured ? 'ok' : ''}">${f.configured ? '已配置 · ' + escapeHtml(f.masked) : '未配置'}</em></span>
+          <span class="auth-type">${f.type === 'cookie' ? '🍪 Cookie' : '🔑 密钥'}</span>
+        </div>
+        <div class="auth-input-row">
+          <input type="password" data-field="${escapeHtml(f.key)}" placeholder="${f.configured ? '已配置，如需更新请粘贴新值' : '粘贴 ' + escapeHtml(f.label)}" autocomplete="off" />
+        </div>
+      </div>`).join('');
+    sec.innerHTML = `
+      <div class="auth-sec-head">
+        <span class="auth-pname">${escapeHtml(pv.name)}</span>
+        <span class="auth-method">${escapeHtml(pv.methodText)}</span>
+      </div>
+      <div class="auth-note">${escapeHtml(pv.note)}</div>
+      ${rows}
+      <div class="auth-input-row" style="justify-content:flex-end;margin-top:2px">
+        <button class="auth-save" data-pid="${escapeHtml(pid)}">保存</button>
+      </div>
+      <div class="auth-msg" data-msg="${escapeHtml(pid)}"></div>`;
+    list.appendChild(sec);
+  }
+  if (highlightPid) {
+    const el = document.getElementById('auth-' + highlightPid);
+    if (el) el.scrollIntoView({ block: 'center' });
+  }
+}
+
+// 打开鉴权（从卡片 🔐 进入，定位到对应供应商）
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.auth-btn');
+  if (!btn) return;
+  $('authModal').classList.remove('hidden');
+  renderAuth(btn.dataset.pid);
+});
+$('authCloseBtn').addEventListener('click', () => {
+  $('authModal').classList.add('hidden');
+});
+
+// 保存某供应商的鉴权字段
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.auth-save');
+  if (!btn) return;
+  const pid = btn.dataset.pid;
+  const sec = btn.closest('.auth-sec');
+  const fields = {};
+  sec.querySelectorAll('input[data-field]').forEach((inp) => {
+    const v = inp.value.trim();
+    if (v) fields[inp.dataset.field] = v;
+  });
+  const msgEl = sec.querySelector('[data-msg]');
+  if (Object.keys(fields).length === 0) {
+    msgEl.textContent = '请先粘贴要更新的字段（留空表示不修改）';
+    return;
+  }
+  msgEl.textContent = '保存中…';
+  const r = await (
+    await fetch('/api/auth/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ providerId: pid, fields }),
+    })
+  ).json();
+  if (!r.ok) {
+    msgEl.textContent = '❌ ' + (r.error || '保存失败');
+    return;
+  }
+  msgEl.textContent = `✅ 已保存 ${r.changed} 项，正在用新凭据刷新…`;
+  sec.querySelectorAll('input[data-field]').forEach((inp) => (inp.value = ''));
+  renderAuth(pid);
+  fetchQuota(true);
 });
 
 // 每秒刷新倒计时展示
