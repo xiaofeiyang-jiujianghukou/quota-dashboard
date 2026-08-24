@@ -178,6 +178,13 @@
   /* 鉴权面板 */
   .auth-btn { background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); cursor: pointer; padding: 1px 7px; font-size: 12px; line-height: 1.6; }
   .auth-btn:hover { border-color: var(--blue); color: var(--blue); }
+  .auth-btn.ok { color: var(--green); border-color: rgba(63,185,80,.5); }
+  .auth-btn.warn { color: var(--amber); border-color: rgba(210,153,34,.5); }
+  .login-box { width: min(520px, 94vw); }
+  #loginQrWrap { text-align: center; margin: 10px 0 4px; }
+  #loginQr { width: 260px; height: 195px; image-rendering: pixelated; border-radius: 8px; background: #fff; padding: 6px; }
+  #loginSmsRow { display: flex; gap: 6px; margin-top: 8px; }
+  #loginSmsRow input { flex: 1; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 7px 9px; font-size: 13px; }
   .auth-box { width: min(580px, 94vw); max-height: 86vh; overflow: auto; }
   .auth-tip { font-size: 12px; color: var(--muted); margin-bottom: 12px; line-height: 1.7; }
   .auth-sec { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; background: var(--panel2); }
@@ -251,6 +258,28 @@
         提醒规则（余量 &lt;20% / 到期 ≤3 天 / 余额 &lt;¥10 / 每日汇总）在 <code>config.json</code> 的 <code>alert</code> 段调整；
         接收人 <code>alert.wecom.chatName</code> 留空 = 发给自己（授权人），填群名 = 发到最近会话中的同名群。
       </div>
+    </div>
+  </div>
+  <!-- 登录弹窗 -->
+  <div id="loginModal" class="modal hidden">
+    <div class="modal-box login-box">
+      <h3 id="loginTitle">🔐 登录</h3>
+      <div class="state" id="loginState">加载中…</div>
+      <div id="loginQrWrap" class="hidden">
+        <img id="loginQr" src="" alt="登录二维码/页面" />
+        <div class="qr-tip">用手机微信扫码登录；或输入手机收到的验证码</div>
+      </div>
+      <div id="loginSmsRow" class="hidden">
+        <input id="loginSms" placeholder="手机验证码（短信收到后填写）" autocomplete="off" />
+        <button id="loginSmsBtn">提交验证码</button>
+      </div>
+      <div class="modal-actions">
+        <button id="loginStartBtn" class="primary">开始授权</button>
+        <button id="loginCancelBtn" class="hidden">取消授权</button>
+        <button id="loginKeyBtn" class="hidden">去填密钥</button>
+        <button id="loginCloseBtn">关闭</button>
+      </div>
+      <div class="wecom-msg" id="loginMsg"></div>
     </div>
   </div>
   <!-- 鉴权设置弹窗 -->
@@ -549,7 +578,7 @@ function render() {
       <div class="card-head">
         <span class="logo" style="color:${accent};background:${accent}"></span>
         <span class="name">${escapeHtml(pv.name)}</span>
-        <button class="auth-btn" data-pid="${escapeHtml(pv.id)}" title="鉴权设置（密钥/Cookie）">🔐</button>
+        <button class="auth-btn ${pv.ok ? 'ok' : 'warn'}" data-pid="${escapeHtml(pv.id)}" title="登录 / 鉴权">🔐 ${pv.ok ? '已登录' : '未登录'}</button>
         <span class="badge ${b.cls}">${b.txt}</span>
         ${headChips ? `<span class="head-expiry">${headChips}</span>` : ''}
       </div>
@@ -781,6 +810,114 @@ document.addEventListener('click', (e) => {
 });
 $('authCloseBtn').addEventListener('click', () => {
   $('authModal').classList.add('hidden');
+});
+
+// ---- 登录弹窗（🔐 状态按钮 → 扫码/验证码自动登录）----
+const COOKIE_LOGIN_PROVIDERS = ['ark', 'zhipu', 'minimax'];
+let loginCtx = { provider: null, poll: null };
+
+function stopLoginPoll() {
+  if (loginCtx.poll) {
+    clearInterval(loginCtx.poll);
+    loginCtx.poll = null;
+  }
+}
+
+async function refreshLoginState() {
+  const pid = loginCtx.provider;
+  if (!pid) return;
+  let auth = null;
+  try {
+    auth = await (await fetch('/api/auth/status')).json();
+  } catch {
+    return;
+  }
+  const pv = auth && auth[pid];
+  const ok = state && state.providers && (state.providers.find((p) => p.id === pid) || {}).ok;
+  const cfgFields = pv ? pv.fields.filter((f) => f.configured) : [];
+  $('loginState').innerHTML = ok
+    ? '状态：<b style="color:var(--green)">已登录</b>（数据采集正常' + (cfgFields.length ? ' · ' + cfgFields.map((f) => f.label).join('/') : '') + '）'
+    : '状态：<b style="color:var(--amber)">未登录</b>' + (cfgFields.length ? '（已配置 ' + cfgFields.map((f) => f.label).join('/') + '，但可能已失效，可重新授权）' : '');
+}
+
+function openLogin(pid) {
+  loginCtx.provider = pid;
+  stopLoginPoll();
+  $('loginModal').classList.remove('hidden');
+  $('loginTitle').textContent = '🔐 登录 · ' + providerName(pid);
+  $('loginMsg').textContent = '';
+  $('loginQrWrap').classList.add('hidden');
+  $('loginSmsRow').classList.add('hidden');
+  $('loginCancelBtn').classList.add('hidden');
+  const cookieCapable = COOKIE_LOGIN_PROVIDERS.includes(pid);
+  $('loginStartBtn').classList.toggle('hidden', !cookieCapable);
+  $('loginKeyBtn').classList.toggle('hidden', cookieCapable);
+  if (!cookieCapable) {
+    $('loginMsg').textContent = '该平台用密钥鉴权（无浏览器登录），点「去填密钥」配置 AK/SK 或 API Key。';
+  }
+  refreshLoginState();
+}
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.auth-btn');
+  if (!btn) return;
+  openLogin(btn.dataset.pid);
+});
+$('loginCloseBtn').addEventListener('click', () => {
+  $('loginModal').classList.add('hidden');
+  stopLoginPoll();
+});
+$('loginStartBtn').addEventListener('click', async () => {
+  $('loginMsg').textContent = '正在启动浏览器授权…（二维码稍等片刻）';
+  const r = await (await fetch('/api/login/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: loginCtx.provider }) })).json();
+  if (!r.ok) {
+    $('loginMsg').innerHTML = '❌ ' + escapeHtml(r.error || '启动失败') + '<br/>' +
+      'Docker 部署请在宿主机运行：<code>node login-helper.mjs --provider ' + escapeHtml(loginCtx.provider) + '</code>（打开本机浏览器登录后自动提交）';
+    return;
+  }
+  $('loginStartBtn').classList.add('hidden');
+  $('loginCancelBtn').classList.remove('hidden');
+  $('loginSmsRow').classList.remove('hidden');
+  $('loginQrWrap').classList.remove('hidden');
+  $('loginQr').src = r.qrUrl + '?t=' + Date.now();
+  $('loginMsg').textContent = '请用手机扫码登录，或输入短信验证码；登录成功后自动保存会话…';
+  stopLoginPoll();
+  loginCtx.poll = setInterval(async () => {
+    const st = await (await fetch('/api/login/status?provider=' + loginCtx.provider)).json();
+    if (st.ok) {
+      stopLoginPoll();
+      $('loginMsg').textContent = '✅ 登录成功，已保存会话凭据，正在刷新数据…';
+      $('loginCancelBtn').classList.add('hidden');
+      $('loginQrWrap').classList.add('hidden');
+      refreshLoginState();
+      fetchQuota(true);
+      setTimeout(() => $('loginModal').classList.add('hidden'), 2500);
+    } else if (st.state === 'waiting') {
+      $('loginQr').src = '/login-' + loginCtx.provider + '.png?t=' + Date.now();
+      $('loginMsg').textContent = '等待扫码/验证码登录…（每 3 秒自动检测）';
+    }
+  }, 3000);
+});
+$('loginSmsBtn').addEventListener('click', async () => {
+  const code = $('loginSms').value.trim();
+  if (!code) { $('loginMsg').textContent = '请输入验证码'; return; }
+  $('loginMsg').textContent = '正在提交验证码…';
+  const r = await (await fetch('/api/login/sms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: loginCtx.provider, code }) })).json();
+  $('loginMsg').textContent = r.ok ? '已提交，等待检测登录…' : '❌ ' + (r.error || '提交失败');
+  $('loginSms').value = '';
+});
+$('loginCancelBtn').addEventListener('click', async () => {
+  await fetch('/api/login/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: loginCtx.provider }) });
+  stopLoginPoll();
+  $('loginCancelBtn').classList.add('hidden');
+  $('loginStartBtn').classList.remove('hidden');
+  $('loginQrWrap').classList.add('hidden');
+  $('loginMsg').textContent = '已取消授权。';
+});
+$('loginKeyBtn').addEventListener('click', () => {
+  $('loginModal').classList.add('hidden');
+  $('authModal').classList.remove('hidden');
+  renderAuth(loginCtx.provider);
 });
 
 // 保存某供应商的鉴权字段

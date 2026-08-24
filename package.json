@@ -11,6 +11,8 @@
     "start": "node server.js",
     "check": "node --check server.js && for f in lib/*.js providers/*.js; do node --check \"$f\" || exit 1; done"
   },
-  "dependencies": {},
+  "dependencies": {
+    "playwright": "^1.47.0"
+  },
   "license": "MIT"
 }

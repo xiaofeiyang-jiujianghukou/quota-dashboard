@@ -7,6 +7,7 @@ import { collectAll } from './lib/runner.js';
 import { evaluateAlerts, alertStatus } from './lib/alert.js';
 import * as wecom from './lib/wecom.js';
 import { authStatus, updateAuth } from './lib/auth.js';
+// login 模块懒加载（未安装 playwright 时自动登录降级，不影响看板）
 
 let cfg = loadConfig(); // 每次采集/状态查询前会热加载，改 config.json 无需重启
 const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
@@ -135,6 +136,51 @@ const server = http.createServer(async (req, res) => {
       }
       return;
     }
+    if (req.method === 'POST' && pathname === '/api/login/start') {
+      try {
+        let body = '';
+        for await (const chunk of req) body += chunk;
+        const { provider } = JSON.parse(body || '{}');
+        const login = await loadLogin();
+        sendJson(res, 200, await login.startLogin(provider, PUBLIC_DIR));
+      } catch (e) {
+        sendJson(res, 200, { ok: false, error: e.message });
+      }
+      return;
+    }
+    if (req.method === 'GET' && pathname === '/api/login/status') {
+      try {
+        const login = await loadLogin();
+        sendJson(res, 200, await login.loginStatus(url.searchParams.get('provider'), PUBLIC_DIR));
+      } catch (e) {
+        sendJson(res, 200, { ok: false, error: e.message });
+      }
+      return;
+    }
+    if (req.method === 'POST' && pathname === '/api/login/sms') {
+      try {
+        let body = '';
+        for await (const chunk of req) body += chunk;
+        const { provider, code } = JSON.parse(body || '{}');
+        const login = await loadLogin();
+        sendJson(res, 200, await login.submitSms(provider, code));
+      } catch (e) {
+        sendJson(res, 200, { ok: false, error: e.message });
+      }
+      return;
+    }
+    if (req.method === 'POST' && pathname === '/api/login/cancel') {
+      try {
+        let body = '';
+        for await (const chunk of req) body += chunk;
+        const { provider } = JSON.parse(body || '{}');
+        const login = await loadLogin();
+        sendJson(res, 200, login.cancelLogin(provider));
+      } catch (e) {
+        sendJson(res, 200, { ok: false, error: e.message });
+      }
+      return;
+    }
     if (req.method === 'GET' && pathname === '/api/auth/status') {
       cfg = loadConfig();
       sendJson(res, 200, authStatus(cfg));
@@ -186,3 +232,14 @@ server.listen(cfg.port, process.env.HOST || '127.0.0.1', () => {
 process.on('SIGINT', () => {
   server.close(() => process.exit(0));
 });
+
+/** 懒加载 login 模块：未安装 playwright（自动登录不可用）时返回友好错误 */
+async function loadLogin() {
+  try {
+    return await import('./lib/login.js');
+  } catch (e) {
+    const err = new Error('自动登录未就绪：未安装 playwright/Chromium（可手动在鉴权面板粘贴密钥/Cookie）');
+    err.isLoginUnavailable = true;
+    throw err;
+  }
+}
