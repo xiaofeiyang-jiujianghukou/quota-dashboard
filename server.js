@@ -136,6 +136,18 @@ const server = http.createServer(async (req, res) => {
       }
       return;
     }
+    if (req.method === 'POST' && pathname === '/api/login/auto') {
+      try {
+        let body = '';
+        for await (const chunk of req) body += chunk;
+        const { provider } = JSON.parse(body || '{}');
+        const login = await loadLogin();
+        sendJson(res, 200, await login.autoLogin(provider, PUBLIC_DIR));
+      } catch (e) {
+        sendJson(res, 200, { ok: false, error: e.message });
+      }
+      return;
+    }
     if (req.method === 'POST' && pathname === '/api/login/start') {
       try {
         let body = '';

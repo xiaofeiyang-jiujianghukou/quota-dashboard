@@ -274,8 +274,9 @@
         <button id="loginSmsBtn">提交验证码</button>
       </div>
       <div class="modal-actions">
-        <button id="loginStartBtn" class="primary">开始授权</button>
-        <button id="loginCancelBtn" class="hidden">取消授权</button>
+        <button id="loginGoBtn" class="primary">去官网登录</button>
+        <button id="loginSyncBtn">我已登录 · 同步会话</button>
+        <button id="loginStartBtn" class="hidden">交互式浏览器登录</button>
         <button id="loginKeyBtn" class="hidden">去填密钥</button>
         <button id="loginCloseBtn">关闭</button>
       </div>
@@ -865,7 +866,8 @@ function openLogin(pid) {
   $('loginSmsRow').classList.add('hidden');
   $('loginCancelBtn').classList.add('hidden');
   const cookieCapable = COOKIE_LOGIN_PROVIDERS.includes(pid);
-  $('loginStartBtn').classList.toggle('hidden', !cookieCapable);
+  $('loginGoBtn').classList.toggle('hidden', !cookieCapable);
+  $('loginSyncBtn').classList.toggle('hidden', !cookieCapable);
   $('loginKeyBtn').classList.toggle('hidden', cookieCapable);
   if (!cookieCapable) {
     $('loginMsg').textContent = '该平台用密钥鉴权（无浏览器登录），点「去填密钥」配置 AK/SK 或 API Key。';
@@ -881,6 +883,33 @@ document.addEventListener('click', (e) => {
 $('loginCloseBtn').addEventListener('click', () => {
   $('loginModal').classList.add('hidden');
   stopLoginPoll();
+});
+// 去官网登录：新标签页打开官方登录页（未登录时点击直接跳）
+const LOGIN_URLS = {
+  ark: 'https://console.volcengine.com/ark/region:cn-beijing/subscription/coding-plan',
+  zhipu: 'https://open.bigmodel.cn/',
+  minimax: 'https://platform.minimaxi.com/',
+};
+$('loginGoBtn').addEventListener('click', () => {
+  const url = LOGIN_URLS[loginCtx.provider];
+  if (url) window.open(url, '_blank');
+  $('loginMsg').textContent = '已在新标签页打开官网，登录完成后点「我已登录 · 同步会话」';
+});
+// 我已登录 · 同步会话：读取本机 Chrome 里刚登录的会话并提交
+$('loginSyncBtn').addEventListener('click', async () => {
+  $('loginSyncBtn').disabled = true;
+  $('loginMsg').textContent = '正在读取本机 Chrome 会话…';
+  const r = await (await fetch('/api/login/auto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: loginCtx.provider }) })).json();
+  if (r.ok) {
+    $('loginMsg').textContent = '✅ 会话已同步！正在刷新…';
+    refreshLoginState();
+    fetchQuota(true);
+    setTimeout(() => $('loginModal').classList.add('hidden'), 1500);
+  } else {
+    $('loginMsg').innerHTML = '❌ ' + escapeHtml(r.error || '同步失败') + '<br/>' +
+      'Docker 部署请在宿主机运行：<code>node auto-login.mjs --provider ' + escapeHtml(loginCtx.provider) + '</code>';
+  }
+  $('loginSyncBtn').disabled = false;
 });
 $('loginStartBtn').addEventListener('click', async () => {
   $('loginMsg').textContent = '正在启动浏览器授权…（二维码稍等片刻）';
