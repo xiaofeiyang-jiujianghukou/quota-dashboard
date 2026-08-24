@@ -146,10 +146,11 @@ server.on('error', (e) => {
   process.exit(1);
 });
 
-server.listen(cfg.port, '127.0.0.1', () => {
+server.listen(cfg.port, process.env.HOST || '127.0.0.1', () => {
+  const host = process.env.HOST || '127.0.0.1';
   console.log('==============================================');
   console.log(`  AI 套餐余量看板  v${pkg.version}`);
-  console.log(`  打开浏览器访问:  http://127.0.0.1:${cfg.port}`);
+  console.log(`  打开浏览器访问:  http://${host === '0.0.0.0' ? '127.0.0.1' : host}:${cfg.port}`);
   console.log(`  自动刷新间隔:    ${cfg.refreshIntervalSec}s`);
   console.log(`  密钥配置:        ${ROOT_DIR}/config.json`);
   console.log('==============================================');

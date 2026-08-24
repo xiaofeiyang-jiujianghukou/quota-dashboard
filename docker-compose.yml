@@ -1,0 +1,25 @@
+# AI 套餐余量看板 — 一键启动
+# 用法：
+#   1. cp config.example.json config.json   （首次：创建并填入你的密钥）
+#   2. docker compose up -d --build
+#   3. 打开 http://127.0.0.1:8899
+services:
+  quota-dashboard:
+    build: .
+    container_name: quota-dashboard
+    # 仅绑定宿主机回环地址，容器外不可访问
+    ports:
+      - "127.0.0.1:8899:8899"
+    volumes:
+      # 密钥配置：改 config.json 后点看板"立即刷新"即热加载（只读挂载更安全）
+      - ./config.json:/app/config.json:ro
+      # 提醒状态持久化
+      - ./data:/app/data
+      # 微信提醒授权状态持久化（wecom-cli 的 credentials）
+      - wecom-config:/root/.config/wecom
+    environment:
+      - TZ=Asia/Shanghai
+    restart: unless-stopped
+
+volumes:
+  wecom-config:

@@ -80,7 +80,7 @@ node server.js
 
 ## 前置要求
 
-- Node.js ≥ 18（用到了内置 `fetch`）
+- Node.js ≥ 18（用到了内置 `fetch`），或 **Docker**
 - **无需安装任何客户端**：方舟/百炼走纯 HTTP（AK/SK），智谱/MiniMax/混元/DeepSeek 走官方 API（Key/Secret）
 - 仅微信提醒可选依赖 `wecom-cli`（`npm i -g @wecom/cli`，`wecom-cli auth init` 扫码一次）
 
