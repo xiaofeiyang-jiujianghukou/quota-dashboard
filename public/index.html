@@ -471,6 +471,20 @@ function escapeHtml(s) {
   }[c]));
 }
 
+let authInfo = null; // 各供应商登录凭据有效性（/api/auth/status）
+function loginStateOf(pid) {
+  if (authInfo && authInfo[pid]) return authInfo[pid].loggedIn === true;
+  return false; // 未加载到鉴权状态时按未登录处理（登录凭据为准，不是采集 OK）
+}
+async function refreshAuthInfo() {
+  try {
+    authInfo = await (await fetch('/api/auth/status')).json();
+    render();
+  } catch {
+    /* ignore */
+  }
+}
+
 function computeMonthlyTotal(state) {
   // 每月订阅总金额：按平台去重求和（同一套餐多个条目只计一次），不含充值（DeepSeek 无 price）
   const byProvider = {};
@@ -578,7 +592,7 @@ function render() {
       <div class="card-head">
         <span class="logo" style="color:${accent};background:${accent}"></span>
         <span class="name">${escapeHtml(pv.name)}</span>
-        <button class="auth-btn ${pv.ok ? 'ok' : 'warn'}" data-pid="${escapeHtml(pv.id)}" title="登录 / 鉴权">🔐 ${pv.ok ? '已登录' : '未登录'}</button>
+        <button class="auth-btn ${loginStateOf(pv.id) ? 'ok' : 'warn'}" data-pid="${escapeHtml(pv.id)}" title="登录 / 鉴权">🔐 ${loginStateOf(pv.id) ? '已登录' : '未登录'}</button>
         <span class="badge ${b.cls}">${b.txt}</span>
         ${headChips ? `<span class="head-expiry">${headChips}</span>` : ''}
       </div>
@@ -631,6 +645,7 @@ async function fetchQuota(force) {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     state = await res.json();
     render();
+    refreshAuthInfo(); // 采集后刷新登录凭据状态（登录失效会反映到卡片）
   } catch (e) {
     $('grid').innerHTML = `<div class="empty">请求失败：${escapeHtml(e.message)}<br/>请确认服务已启动（node server.js）</div>`;
   } finally {
@@ -960,8 +975,10 @@ setInterval(tick, 1000);
 (async function init() {
   $('footer').innerHTML = `密钥配置：<code>quota-dashboard/config.json</code>（仅本机 127.0.0.1 可访问，密钥不会回传到页面） · 六家平台均为<b>纯 HTTP + 密钥</b>查询，无需安装任何 AI 平台客户端 · 微信提醒经 <code>wecom-cli</code>（企业微信机器人）`;
   await fetchStatus();
+  await refreshAuthInfo();
   render();
   await fetchQuota(false);
+  refreshAuthInfo();
   armTimer();
 })();
 </script>

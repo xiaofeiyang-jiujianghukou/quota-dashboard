@@ -183,7 +183,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && pathname === '/api/auth/status') {
       cfg = loadConfig();
-      sendJson(res, 200, authStatus(cfg));
+      sendJson(res, 200, await authStatus(cfg));
       return;
     }
     if (req.method === 'POST' && pathname === '/api/auth/update') {
@@ -193,7 +193,7 @@ const server = http.createServer(async (req, res) => {
         for await (const chunk of req) body += chunk;
         const { providerId, fields } = JSON.parse(body || '{}');
         const r = updateAuth(cfg, providerId, fields);
-        sendJson(res, 200, { ...r, status: authStatus(loadConfig()) });
+        sendJson(res, 200, { ...r, status: await authStatus(loadConfig()) });
       } catch (e) {
         sendJson(res, 200, { ok: false, error: e.message });
       }
