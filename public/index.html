@@ -864,7 +864,6 @@ function openLogin(pid) {
   $('loginMsg').textContent = '';
   $('loginQrWrap').classList.add('hidden');
   $('loginSmsRow').classList.add('hidden');
-  $('loginCancelBtn').classList.add('hidden');
   const cookieCapable = COOKIE_LOGIN_PROVIDERS.includes(pid);
   $('loginGoBtn').classList.toggle('hidden', !cookieCapable);
   $('loginSyncBtn').classList.toggle('hidden', !cookieCapable);
@@ -887,8 +886,8 @@ $('loginCloseBtn').addEventListener('click', () => {
 // 去官网登录：新标签页打开官方登录页（未登录时点击直接跳）
 const LOGIN_URLS = {
   ark: 'https://console.volcengine.com/ark/region:cn-beijing/subscription/coding-plan',
-  zhipu: 'https://open.bigmodel.cn/',
-  minimax: 'https://platform.minimaxi.com/',
+  zhipu: 'https://bigmodel.cn/coding-plan/personal/usage',
+  minimax: 'https://platform.minimaxi.com/console/usage',
 };
 $('loginGoBtn').addEventListener('click', () => {
   const url = LOGIN_URLS[loginCtx.provider];
@@ -920,7 +919,6 @@ $('loginStartBtn').addEventListener('click', async () => {
     return;
   }
   $('loginStartBtn').classList.add('hidden');
-  $('loginCancelBtn').classList.remove('hidden');
   $('loginSmsRow').classList.remove('hidden');
   $('loginQrWrap').classList.remove('hidden');
   $('loginQr').src = r.qrUrl + '?t=' + Date.now();
@@ -931,7 +929,6 @@ $('loginStartBtn').addEventListener('click', async () => {
     if (st.ok) {
       stopLoginPoll();
       $('loginMsg').textContent = '✅ 登录成功，已保存会话凭据，正在刷新数据…';
-      $('loginCancelBtn').classList.add('hidden');
       $('loginQrWrap').classList.add('hidden');
       refreshLoginState();
       fetchQuota(true);
@@ -949,14 +946,6 @@ $('loginSmsBtn').addEventListener('click', async () => {
   const r = await (await fetch('/api/login/sms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: loginCtx.provider, code }) })).json();
   $('loginMsg').textContent = r.ok ? '已提交，等待检测登录…' : '❌ ' + (r.error || '提交失败');
   $('loginSms').value = '';
-});
-$('loginCancelBtn').addEventListener('click', async () => {
-  await fetch('/api/login/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: loginCtx.provider }) });
-  stopLoginPoll();
-  $('loginCancelBtn').classList.add('hidden');
-  $('loginStartBtn').classList.remove('hidden');
-  $('loginQrWrap').classList.add('hidden');
-  $('loginMsg').textContent = '已取消授权。';
 });
 $('loginKeyBtn').addEventListener('click', () => {
   $('loginModal').classList.add('hidden');
