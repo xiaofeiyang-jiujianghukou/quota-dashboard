@@ -181,10 +181,8 @@
   .auth-btn.ok { color: var(--green); border-color: rgba(63,185,80,.5); }
   .auth-btn.warn { color: var(--amber); border-color: rgba(210,153,34,.5); }
   .login-box { width: min(520px, 94vw); }
-  #loginQrWrap { text-align: center; margin: 10px 0 4px; }
-  #loginQr { width: 260px; height: 195px; image-rendering: pixelated; border-radius: 8px; background: #fff; padding: 6px; }
-  #loginSmsRow { display: flex; gap: 6px; margin-top: 8px; }
-  #loginSmsRow input { flex: 1; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 7px 9px; font-size: 13px; }
+  .auth-go { display: flex; gap: 8px; margin-bottom: 10px; }
+  .auth-go button { flex: 1; }
   .auth-box { width: min(580px, 94vw); max-height: 86vh; overflow: auto; }
   .auth-tip { font-size: 12px; color: var(--muted); margin-bottom: 12px; line-height: 1.7; }
   .auth-sec { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; background: var(--panel2); }
@@ -260,35 +258,18 @@
       </div>
     </div>
   </div>
-  <!-- 登录弹窗 -->
-  <div id="loginModal" class="modal hidden">
-    <div class="modal-box login-box">
-      <h3 id="loginTitle">🔐 登录</h3>
-      <div class="state" id="loginState">加载中…</div>
-      <div id="loginQrWrap" class="hidden">
-        <img id="loginQr" src="" alt="登录二维码/页面" />
-        <div class="qr-tip">用手机微信扫码登录；或输入手机收到的验证码</div>
-      </div>
-      <div id="loginSmsRow" class="hidden">
-        <input id="loginSms" placeholder="手机验证码（短信收到后填写）" autocomplete="off" />
-        <button id="loginSmsBtn">提交验证码</button>
-      </div>
-      <div class="modal-actions">
-        <button id="loginGoBtn" class="primary">去官网登录</button>
-        <button id="loginSyncBtn">我已登录 · 同步会话</button>
-        <button id="loginStartBtn" class="hidden">交互式浏览器登录</button>
-        <button id="loginKeyBtn" class="hidden">去填密钥</button>
-        <button id="loginCloseBtn">关闭</button>
-      </div>
-      <div class="wecom-msg" id="loginMsg"></div>
-    </div>
-  </div>
-  <!-- 鉴权设置弹窗 -->
+  <!-- 供应商鉴权弹窗（点卡片 🔐 只打开该供应商自己的面板） -->
   <div id="authModal" class="modal hidden">
     <div class="modal-box auth-box">
-      <h3>🔐 供应商鉴权</h3>
-      <div class="auth-tip">填写各平台的密钥 / 会话 Cookie，保存后<b>立即生效</b>（写入 config.json，热加载）。<br/>🔑 密钥长期有效；🍪 会话 Cookie 会过期，失效时在对应卡片重新抓取更新即可。</div>
+      <h3 id="authTitle">🔐 供应商鉴权</h3>
+      <div class="state" id="authState">加载中…</div>
+      <div id="authGoRow" class="auth-go hidden">
+        <button id="authGoBtn" class="primary">去官网授权</button>
+        <button id="authSyncBtn">我已授权 · 保存会话</button>
+      </div>
+      <div class="auth-tip" id="authTip">在对应官网登录授权后，点「我已授权 · 保存会话」自动读取本机浏览器会话并保存（🍪 Cookie 会过期，失效时重新授权即可）；也可手动粘贴下面的字段，保存后立即生效。</div>
       <div id="authList"></div>
+      <div class="wecom-msg" id="authMsg"></div>
       <div class="modal-actions"><button id="authCloseBtn">关闭</button></div>
     </div>
   </div>
@@ -774,183 +755,101 @@ $('wecomBtn').addEventListener('click', async () => {
   await refreshWecomPanel();
 });
 
-// ---- 鉴权面板（卡片头部 🔐 按钮）----
-async function renderAuth(highlightPid) {
+// ---- 供应商鉴权（卡片 🔐 → 只打开该供应商自己的鉴权面板）----
+const COOKIE_LOGIN_PROVIDERS = ['ark', 'zhipu', 'minimax'];
+let authCtx = { provider: null };
+
+// 去官网授权：新标签页打开官方授权页（未登录时点击直接跳）
+const LOGIN_URLS = {
+  ark: 'https://console.volcengine.com/ark/region:cn-beijing/subscription/coding-plan',
+  zhipu: 'https://bigmodel.cn/coding-plan/personal/usage',
+  minimax: 'https://platform.minimaxi.com/console/usage',
+};
+
+function openAuth(pid) {
+  authCtx.provider = pid;
+  $('authModal').classList.remove('hidden');
+  $('authMsg').textContent = '';
+  renderAuth(pid);
+}
+
+// 打开鉴权（从卡片 🔐 进入，只显示该供应商）
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.auth-btn');
+  if (!btn) return;
+  openAuth(btn.dataset.pid);
+});
+$('authCloseBtn').addEventListener('click', () => {
+  $('authModal').classList.add('hidden');
+});
+
+async function renderAuth(pid) {
   let s;
   try {
     s = await (await fetch('/api/auth/status')).json();
   } catch {
     return;
   }
+  const pv = s && s[pid];
+  if (!pv) {
+    $('authList').innerHTML = '<div class="empty">未知供应商</div>';
+    return;
+  }
+  $('authTitle').textContent = '🔐 ' + pv.name + ' · 鉴权';
+  const cfgFields = pv.fields.filter((f) => f.configured);
+  $('authState').innerHTML = pv.loggedIn
+    ? '状态：<b style="color:var(--green)">已登录</b>' + (cfgFields.length ? ' · 已配置 ' + cfgFields.map((f) => f.label).join(' / ') : '')
+    : '状态：<b style="color:var(--amber)">未登录</b>' + (cfgFields.length ? '（已配置 ' + cfgFields.map((f) => f.label).join(' / ') + '，但凭据可能已失效，请重新授权）' : '（未配置任何凭据）');
+  // cookie 平台：显示「去官网授权 / 我已授权·保存会话」
+  const cookieCapable = COOKIE_LOGIN_PROVIDERS.includes(pid);
+  $('authGoRow').classList.toggle('hidden', !cookieCapable);
+  $('authTip').innerHTML = cookieCapable
+    ? '在对应官网登录授权后，点「我已授权 · 保存会话」自动读取本机浏览器会话并保存（🍪 Cookie 会过期，失效时重新授权即可）；也可手动粘贴下面的字段。'
+    : '该平台用🔑密钥鉴权：在官网控制台获取密钥后粘贴到下面保存即可（无需浏览器 Cookie）。';
   const list = $('authList');
-  list.innerHTML = '';
-  for (const [pid, pv] of Object.entries(s)) {
-    const sec = document.createElement('div');
-    sec.className = 'auth-sec' + (pid === highlightPid ? ' active' : '');
-    sec.id = 'auth-' + pid;
-    const rows = pv.fields.map((f) => `
-      <div class="auth-field">
-        <div class="auth-field-head">
-          <span class="auth-label">${escapeHtml(f.label)} <em class="${f.configured ? 'ok' : ''}">${f.configured ? '已配置 · ' + escapeHtml(f.masked) : '未配置'}</em></span>
-          <span class="auth-type">${f.type === 'cookie' ? '🍪 Cookie' : '🔑 密钥'}</span>
-        </div>
-        <div class="auth-input-row">
-          <input type="password" data-field="${escapeHtml(f.key)}" placeholder="${f.configured ? '已配置，如需更新请粘贴新值' : '粘贴 ' + escapeHtml(f.label)}" autocomplete="off" />
-        </div>
-      </div>`).join('');
-    sec.innerHTML = `
-      <div class="auth-sec-head">
-        <span class="auth-pname">${escapeHtml(pv.name)}</span>
-        <span class="auth-method">${escapeHtml(pv.methodText)}</span>
+  const rows = pv.fields.map((f) => `
+    <div class="auth-field">
+      <div class="auth-field-head">
+        <span class="auth-label">${escapeHtml(f.label)} <em class="${f.configured ? 'ok' : ''}">${f.configured ? '已配置 · ' + escapeHtml(f.masked) : '未配置'}</em></span>
+        <span class="auth-type">${f.type === 'cookie' ? '🍪 Cookie' : '🔑 密钥'}</span>
       </div>
+      <div class="auth-input-row">
+        <input type="password" data-field="${escapeHtml(f.key)}" placeholder="${f.configured ? '已配置，如需更新请粘贴新值' : '粘贴 ' + escapeHtml(f.label)}" autocomplete="off" />
+      </div>
+    </div>`).join('');
+  list.innerHTML = `
+    <div class="auth-sec">
       <div class="auth-note">${escapeHtml(pv.note)}</div>
       ${rows}
       <div class="auth-input-row" style="justify-content:flex-end;margin-top:2px">
         <button class="auth-save" data-pid="${escapeHtml(pid)}">保存</button>
       </div>
-      <div class="auth-msg" data-msg="${escapeHtml(pid)}"></div>`;
-    list.appendChild(sec);
-  }
-  if (highlightPid) {
-    const el = document.getElementById('auth-' + highlightPid);
-    if (el) el.scrollIntoView({ block: 'center' });
-  }
+      <div class="auth-msg" data-msg="${escapeHtml(pid)}"></div>
+    </div>`;
 }
 
-// 打开鉴权（从卡片 🔐 进入，定位到对应供应商）
-document.addEventListener('click', (e) => {
-  const btn = e.target.closest('.auth-btn');
-  if (!btn) return;
-  $('authModal').classList.remove('hidden');
-  renderAuth(btn.dataset.pid);
-});
-$('authCloseBtn').addEventListener('click', () => {
-  $('authModal').classList.add('hidden');
-});
-
-// ---- 登录弹窗（🔐 状态按钮 → 扫码/验证码自动登录）----
-const COOKIE_LOGIN_PROVIDERS = ['ark', 'zhipu', 'minimax'];
-let loginCtx = { provider: null, poll: null };
-
-function stopLoginPoll() {
-  if (loginCtx.poll) {
-    clearInterval(loginCtx.poll);
-    loginCtx.poll = null;
-  }
-}
-
-async function refreshLoginState() {
-  const pid = loginCtx.provider;
-  if (!pid) return;
-  let auth = null;
-  try {
-    auth = await (await fetch('/api/auth/status')).json();
-  } catch {
-    return;
-  }
-  const pv = auth && auth[pid];
-  const ok = state && state.providers && (state.providers.find((p) => p.id === pid) || {}).ok;
-  const cfgFields = pv ? pv.fields.filter((f) => f.configured) : [];
-  $('loginState').innerHTML = ok
-    ? '状态：<b style="color:var(--green)">已登录</b>（数据采集正常' + (cfgFields.length ? ' · ' + cfgFields.map((f) => f.label).join('/') : '') + '）'
-    : '状态：<b style="color:var(--amber)">未登录</b>' + (cfgFields.length ? '（已配置 ' + cfgFields.map((f) => f.label).join('/') + '，但可能已失效，可重新授权）' : '');
-}
-
-function openLogin(pid) {
-  loginCtx.provider = pid;
-  stopLoginPoll();
-  $('loginModal').classList.remove('hidden');
-  $('loginTitle').textContent = '🔐 登录 · ' + providerName(pid);
-  $('loginMsg').textContent = '';
-  $('loginQrWrap').classList.add('hidden');
-  $('loginSmsRow').classList.add('hidden');
-  const cookieCapable = COOKIE_LOGIN_PROVIDERS.includes(pid);
-  $('loginGoBtn').classList.toggle('hidden', !cookieCapable);
-  $('loginSyncBtn').classList.toggle('hidden', !cookieCapable);
-  $('loginKeyBtn').classList.toggle('hidden', cookieCapable);
-  if (!cookieCapable) {
-    $('loginMsg').textContent = '该平台用密钥鉴权（无浏览器登录），点「去填密钥」配置 AK/SK 或 API Key。';
-  }
-  refreshLoginState();
-}
-
-document.addEventListener('click', (e) => {
-  const btn = e.target.closest('.auth-btn');
-  if (!btn) return;
-  openLogin(btn.dataset.pid);
-});
-$('loginCloseBtn').addEventListener('click', () => {
-  $('loginModal').classList.add('hidden');
-  stopLoginPoll();
-});
-// 去官网登录：新标签页打开官方登录页（未登录时点击直接跳）
-const LOGIN_URLS = {
-  ark: 'https://console.volcengine.com/ark/region:cn-beijing/subscription/coding-plan',
-  zhipu: 'https://bigmodel.cn/coding-plan/personal/usage',
-  minimax: 'https://platform.minimaxi.com/console/usage',
-};
-$('loginGoBtn').addEventListener('click', () => {
-  const url = LOGIN_URLS[loginCtx.provider];
+// 去官网授权
+$('authGoBtn').addEventListener('click', () => {
+  const url = LOGIN_URLS[authCtx.provider];
   if (url) window.open(url, '_blank');
-  $('loginMsg').textContent = '已在新标签页打开官网，登录完成后点「我已登录 · 同步会话」';
+  $('authMsg').textContent = '已在新标签页打开官方授权页，登录完成后点「我已授权 · 保存会话」';
 });
-// 我已登录 · 同步会话：读取本机 Chrome 里刚登录的会话并提交
-$('loginSyncBtn').addEventListener('click', async () => {
-  $('loginSyncBtn').disabled = true;
-  $('loginMsg').textContent = '正在读取本机 Chrome 会话…';
-  const r = await (await fetch('/api/login/auto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: loginCtx.provider }) })).json();
+
+// 我已授权 · 保存会话：读取本机 Chrome 里刚登录的会话并提交保存
+$('authSyncBtn').addEventListener('click', async () => {
+  $('authSyncBtn').disabled = true;
+  $('authMsg').textContent = '正在读取本机 Chrome 会话…';
+  const r = await (await fetch('/api/login/auto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: authCtx.provider }) })).json();
   if (r.ok) {
-    $('loginMsg').textContent = '✅ 会话已同步！正在刷新…';
-    refreshLoginState();
+    $('authMsg').innerHTML = '✅ 会话已保存！正在刷新…';
+    await renderAuth(authCtx.provider);
     fetchQuota(true);
-    setTimeout(() => $('loginModal').classList.add('hidden'), 1500);
+    setTimeout(() => $('authModal').classList.add('hidden'), 1500);
   } else {
-    $('loginMsg').innerHTML = '❌ ' + escapeHtml(r.error || '同步失败') + '<br/>' +
-      'Docker 部署请在宿主机运行：<code>node auto-login.mjs --provider ' + escapeHtml(loginCtx.provider) + '</code>';
+    $('authMsg').innerHTML = '❌ ' + escapeHtml(r.error || '同步失败') + '<br/>' +
+      'Docker 部署请在宿主机运行：<code>node auto-login.mjs --provider ' + escapeHtml(authCtx.provider) + '</code>';
   }
-  $('loginSyncBtn').disabled = false;
-});
-$('loginStartBtn').addEventListener('click', async () => {
-  $('loginMsg').textContent = '正在启动浏览器授权…（二维码稍等片刻）';
-  const r = await (await fetch('/api/login/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: loginCtx.provider }) })).json();
-  if (!r.ok) {
-    $('loginMsg').innerHTML = '❌ ' + escapeHtml(r.error || '启动失败') + '<br/>' +
-      'Docker 部署请在宿主机运行：<code>node login-helper.mjs --provider ' + escapeHtml(loginCtx.provider) + '</code>（打开本机浏览器登录后自动提交）';
-    return;
-  }
-  $('loginStartBtn').classList.add('hidden');
-  $('loginSmsRow').classList.remove('hidden');
-  $('loginQrWrap').classList.remove('hidden');
-  $('loginQr').src = r.qrUrl + '?t=' + Date.now();
-  $('loginMsg').textContent = '请用手机扫码登录，或输入短信验证码；登录成功后自动保存会话…';
-  stopLoginPoll();
-  loginCtx.poll = setInterval(async () => {
-    const st = await (await fetch('/api/login/status?provider=' + loginCtx.provider)).json();
-    if (st.ok) {
-      stopLoginPoll();
-      $('loginMsg').textContent = '✅ 登录成功，已保存会话凭据，正在刷新数据…';
-      $('loginQrWrap').classList.add('hidden');
-      refreshLoginState();
-      fetchQuota(true);
-      setTimeout(() => $('loginModal').classList.add('hidden'), 2500);
-    } else if (st.state === 'waiting') {
-      $('loginQr').src = '/login-' + loginCtx.provider + '.png?t=' + Date.now();
-      $('loginMsg').textContent = '等待扫码/验证码登录…（每 3 秒自动检测）';
-    }
-  }, 3000);
-});
-$('loginSmsBtn').addEventListener('click', async () => {
-  const code = $('loginSms').value.trim();
-  if (!code) { $('loginMsg').textContent = '请输入验证码'; return; }
-  $('loginMsg').textContent = '正在提交验证码…';
-  const r = await (await fetch('/api/login/sms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: loginCtx.provider, code }) })).json();
-  $('loginMsg').textContent = r.ok ? '已提交，等待检测登录…' : '❌ ' + (r.error || '提交失败');
-  $('loginSms').value = '';
-});
-$('loginKeyBtn').addEventListener('click', () => {
-  $('loginModal').classList.add('hidden');
-  $('authModal').classList.remove('hidden');
-  renderAuth(loginCtx.provider);
+  $('authSyncBtn').disabled = false;
 });
 
 // 保存某供应商的鉴权字段
