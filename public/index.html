@@ -804,7 +804,7 @@ async function renderAuth(pid) {
   const cookieCapable = COOKIE_LOGIN_PROVIDERS.includes(pid);
   $('authGoRow').classList.toggle('hidden', !cookieCapable);
   $('authTip').innerHTML = cookieCapable
-    ? '在对应官网登录授权后，点「我已授权 · 保存会话」自动读取本机浏览器会话并保存（🍪 Cookie 会过期，失效时重新授权即可）；也可手动粘贴下面的字段。'
+    ? '登录官网后点「我已授权 · 保存会话」会连接<b>本机正在运行的 Chrome</b>读取会话。首次需用 <code>--remote-debugging-port=9222</code> 重启一次 Chrome（点保存会话失败时会提示命令）；也可手动粘贴下面字段。'
     : '该平台用🔑密钥鉴权：在官网控制台获取密钥后粘贴到下面保存即可（无需浏览器 Cookie）。';
   const list = $('authList');
   const rows = pv.fields.map((f) => `
@@ -835,10 +835,10 @@ $('authGoBtn').addEventListener('click', () => {
   $('authMsg').textContent = '已在新标签页打开官方授权页，登录完成后点「我已授权 · 保存会话」';
 });
 
-// 我已授权 · 保存会话：读取本机 Chrome 里刚登录的会话并提交保存
+// 我已授权 · 保存会话：连接本机正在运行的 Chrome（DevTools 协议）读取已解密的会话并保存
 $('authSyncBtn').addEventListener('click', async () => {
   $('authSyncBtn').disabled = true;
-  $('authMsg').textContent = '正在读取本机 Chrome 会话…';
+  $('authMsg').textContent = '正在连接本机 Chrome 会话…';
   const r = await (await fetch('/api/login/auto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: authCtx.provider }) })).json();
   if (r.ok) {
     $('authMsg').innerHTML = '✅ 会话已保存！正在刷新…';
@@ -846,8 +846,7 @@ $('authSyncBtn').addEventListener('click', async () => {
     fetchQuota(true);
     setTimeout(() => $('authModal').classList.add('hidden'), 1500);
   } else {
-    $('authMsg').innerHTML = '❌ ' + escapeHtml(r.error || '同步失败') + '<br/>' +
-      'Docker 部署请在宿主机运行：<code>node auto-login.mjs --provider ' + escapeHtml(authCtx.provider) + '</code>';
+    $('authMsg').innerHTML = '❌ ' + escapeHtml(r.error || '同步失败').replace(/\n/g, '<br/>');
   }
   $('authSyncBtn').disabled = false;
 });
