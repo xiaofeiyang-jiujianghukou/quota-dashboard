@@ -201,6 +201,14 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && pathname === '/api/auth/update') {
       try {
         cfg = loadConfig();
+        // 鉴权：config.authToken 非空时（上云场景），必须携带匹配 token 才允许写
+        if (cfg.authToken) {
+          const token = String(req.headers['authorization'] || '').replace(/^Bearer\s+/i, '') || String(req.headers['x-auth-token'] || '');
+          if (token !== cfg.authToken) {
+            sendJson(res, 401, { ok: false, error: '鉴权失败：authToken 不匹配' });
+            return;
+          }
+        }
         let body = '';
         for await (const chunk of req) body += chunk;
         const { providerId, fields } = JSON.parse(body || '{}');

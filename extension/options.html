@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>会话同步设置</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      margin: 0; padding: 18px; width: 360px; box-sizing: border-box;
+      background: #0f1117; color: #e6e8ee; font-size: 13px; line-height: 1.6;
+    }
+    h1 { font-size: 15px; margin: 0 0 4px; }
+    .sub { color: #8b90a0; font-size: 12px; margin-bottom: 14px; }
+    label { display: block; font-size: 12px; color: #b6bac6; margin: 12px 0 4px; }
+    input {
+      width: 100%; box-sizing: border-box; background: #171a23; color: #e6e8ee;
+      border: 1px solid #2a2f3a; border-radius: 8px; padding: 8px 10px; font-size: 13px;
+    }
+    input:focus { outline: none; border-color: #4c8dff; }
+    .row { display: flex; gap: 8px; margin-top: 14px; }
+    button {
+      flex: 1; background: #2a2f3a; color: #e6e8ee; border: 1px solid #3a4150;
+      border-radius: 8px; padding: 8px 10px; font-size: 12px; cursor: pointer;
+    }
+    button.primary { background: #2f6bff; border-color: #2f6bff; color: #fff; font-weight: 600; }
+    button:hover { opacity: 0.9; }
+    #msg { margin-top: 12px; font-size: 12px; color: #8b90a0; min-height: 16px; white-space: pre-wrap; }
+    #msg.ok { color: #3fbf50; }
+    #msg.err { color: #ff6b6b; }
+    .hint { margin-top: 14px; padding-top: 10px; border-top: 1px dashed #2a2f3a; font-size: 11.5px; color: #8b90a0; }
+    code { background: #1b1f29; padding: 1px 5px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>🔐 AI 套餐看板 · 会话同步</h1>
+  <div class="sub">登录方舟 / 智谱 / MiniMax 后自动把会话推送到云端看板</div>
+
+  <label for="dashboard">云端看板地址</label>
+  <input id="dashboard" placeholder="https://你的域名" autocomplete="off" spellcheck="false" />
+
+  <label for="token">写接口鉴权 token（云端 config.json 的 authToken，留空=云端未鉴权）</label>
+  <input id="token" type="password" placeholder="可选" autocomplete="off" spellcheck="false" />
+
+  <div class="row">
+    <button class="primary" id="saveBtn">保存</button>
+    <button id="testBtn">测试连接</button>
+    <button id="syncBtn">立即同步</button>
+  </div>
+  <div id="msg"></div>
+
+  <div class="hint">
+    说明：装好后<b>无需任何操作</b>。你在 Chrome 里登录方舟/智谱/MiniMax，扩展会自动抓取会话并推送云端（同平台 10 分钟内去重）。<br/>
+    云端 <code>/api/auth/update</code> 需配置 <code>authToken</code> 时，请在上面填一致的 token。
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
