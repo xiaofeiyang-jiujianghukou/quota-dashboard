@@ -110,13 +110,22 @@ async function syncZhipu(force = false) {
   if (tok) await push('zhipu', { sessionToken: tok.value }, force);
 }
 
-// 登录时 cookie 变化 → 自动同步对应平台
+// 登录时 cookie 变化 → 防抖后自动同步（等连续 3 秒无新 cookie 写入，说明已写完，立即触发）
+const debounceTimers = {};
+function debouncedSync(pid, fn, delay = 3000) {
+  if (debounceTimers[pid]) clearTimeout(debounceTimers[pid]);
+  debounceTimers[pid] = setTimeout(() => {
+    delete debounceTimers[pid];
+    fn();
+  }, delay);
+}
+
 chrome.cookies.onChanged.addListener((info) => {
   const { cookie, removed } = info;
   if (removed) return;
-  if (cookie.domain.endsWith('volcengine.com') && ['userInfo', 'digest'].includes(cookie.name)) syncArk();
-  if (cookie.domain.endsWith('minimaxi.com') && cookie.name === '_token') syncMinimax();
-  if (cookie.domain.endsWith('bigmodel.cn') && cookie.name === 'bigmodel_token_production') syncZhipu();
+  if (cookie.domain.endsWith('volcengine.com') && ['userInfo', 'digest'].includes(cookie.name)) debouncedSync('ark', syncArk);
+  if (cookie.domain.endsWith('minimaxi.com') && cookie.name === '_token') debouncedSync('minimax', syncMinimax);
+  if (cookie.domain.endsWith('bigmodel.cn') && cookie.name === 'bigmodel_token_production') debouncedSync('zhipu', syncZhipu);
 });
 
 // 「立即同步」：清节流 → 三平台全部静默读取并推送（无需打开标签页）
