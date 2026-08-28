@@ -835,9 +835,35 @@ $('authGoBtn').addEventListener('click', () => {
   $('authMsg').textContent = '已在新标签页打开官方授权页，登录完成后点「我已授权 · 保存会话」';
 });
 
-// 我已授权 · 保存会话：连接本机正在运行的 Chrome（DevTools 协议）读取已解密的会话并保存
+// 我已授权 · 保存会话：优先通过浏览器扩展同步（静默读 cookie 推云端），无扩展时回退 CDP
 $('authSyncBtn').addEventListener('click', async () => {
   $('authSyncBtn').disabled = true;
+  // 1) 若装了「会话同步」扩展，直接调扩展同步（最可靠，绕开 Chrome 加密/调试端口限制）
+  if (window.__quotaSyncExt) {
+    $('authMsg').textContent = '正在通过浏览器扩展同步会话…';
+    const ok = await new Promise((resolve) => {
+      const t = setTimeout(() => resolve(false), 8000);
+      window.addEventListener('message', function h(e) {
+        if (e.data && e.data.type === 'quota-sync-done') {
+          clearTimeout(t);
+          window.removeEventListener('message', h);
+          resolve(!!e.data.ok);
+        }
+      });
+      window.postMessage({ type: 'quota-sync' }, '*');
+    });
+    if (ok) {
+      $('authMsg').innerHTML = '✅ 已通过扩展同步会话！正在刷新…';
+      await renderAuth(authCtx.provider);
+      fetchQuota(true);
+      setTimeout(() => $('authModal').classList.add('hidden'), 1500);
+    } else {
+      $('authMsg').innerHTML = '❌ 扩展同步未完成。请确认扩展已配置云端地址，或点扩展图标 →「立即同步」';
+    }
+    $('authSyncBtn').disabled = false;
+    return;
+  }
+  // 2) 无扩展：回退到连接本机 Chrome（DevTools 协议）
   $('authMsg').textContent = '正在连接本机 Chrome 会话…';
   const r = await (await fetch('/api/login/auto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: authCtx.provider }) })).json();
   if (r.ok) {
