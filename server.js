@@ -249,6 +249,12 @@ server.listen(cfg.port, process.env.HOST || '127.0.0.1', () => {
   console.log('==============================================');
 });
 
+// 常驻采集/提醒循环：无人打开看板时也保证 峰谷、余额、到期、预算 提醒按时触发（5 分钟一轮）
+setInterval(() => {
+  refresh().catch((e) => console.error('[timer] 后台采集失败:', e.message));
+}, 5 * 60 * 1000);
+setTimeout(() => refresh().catch(() => {}), 3000); // 启动预热（延迟 3s 等容器网络就绪）
+
 process.on('SIGINT', () => {
   server.close(() => process.exit(0));
 });

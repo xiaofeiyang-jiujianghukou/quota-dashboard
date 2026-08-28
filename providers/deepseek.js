@@ -173,6 +173,19 @@ function isPeakBucket(timeSec) {
   return (h >= 9 && h < 12) || (h >= 14 && h < 18);
 }
 
+/** 当前峰谷状态文案（北京时间实时计算） */
+function currentPeriod() {
+  const bj = new Date(Date.now() + 8 * 3600 * 1000);
+  const wd = bj.getUTCDay();
+  const h = bj.getUTCHours();
+  if (wd === 0 || wd === 6) return '当前空闲（周末全天半价）';
+  if (h < 9) return '当前空闲（9:00 进入高峰）';
+  if (h < 12) return '当前高峰（12:00 进入午休闲时）';
+  if (h < 14) return '当前空闲·午休（14:00 进入高峰）';
+  if (h < 18) return '当前高峰（18:00 结束）';
+  return '当前空闲（明早 9:00 进入高峰）';
+}
+
 async function fetchUsage(p, timeoutMs) {
   const now = Math.floor(Date.now() / 1000);
   const d8 = new Date((now + 8 * 3600) * 1000);
@@ -218,6 +231,12 @@ async function fetchUsage(p, timeoutMs) {
   for (const [t, v] of Object.entries(tokHourly)) (isPeakBucket(Number(t)) ? peak : idle).tok += v;
 
   const items = [];
+  items.push({
+    key: 'deepseek-peak-schedule',
+    title: '峰谷时段',
+    kind: 'info',
+    extra: { note: `高峰 工作日 9:00-12:00 / 14:00-18:00 ｜ 空闲 其余时段（半价）· ${currentPeriod()}` },
+  });
   items.push({
     key: 'deepseek-usage-today',
     title: '今日消费',
