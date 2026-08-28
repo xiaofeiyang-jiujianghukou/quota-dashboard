@@ -759,11 +759,14 @@ $('wecomBtn').addEventListener('click', async () => {
 const COOKIE_LOGIN_PROVIDERS = ['ark', 'zhipu', 'minimax'];
 let authCtx = { provider: null };
 
-// 去官网授权：新标签页打开官方授权页（未登录时点击直接跳）
+// 去官网：新标签页打开官方页面（cookie 平台=授权页；密钥平台=获取密钥页）
 const LOGIN_URLS = {
   ark: 'https://console.volcengine.com/ark/region:cn-beijing/subscription/coding-plan',
+  bailian: 'https://bailian.console.aliyun.com/cn-beijing?tab=plan#/efm/subscription/token-plan/personal',
   zhipu: 'https://bigmodel.cn/coding-plan/personal/usage',
   minimax: 'https://platform.minimaxi.com/console/usage',
+  tencent: 'https://console.cloud.tencent.com/tokenhub/tokenplan',
+  deepseek: 'https://platform.deepseek.com/usage',
 };
 
 function openAuth(pid) {
@@ -800,12 +803,14 @@ async function renderAuth(pid) {
   $('authState').innerHTML = pv.loggedIn
     ? '状态：<b style="color:var(--green)">已登录</b>' + (cfgFields.length ? ' · 已配置 ' + cfgFields.map((f) => f.label).join(' / ') : '')
     : '状态：<b style="color:var(--amber)">未登录</b>' + (cfgFields.length ? '（已配置 ' + cfgFields.map((f) => f.label).join(' / ') + '，但凭据可能已失效，请重新授权）' : '（未配置任何凭据）');
-  // cookie 平台：显示「去官网授权 / 我已授权·保存会话」
+  // 所有平台都显示「去官网」；「我已授权·保存会话」仅 cookie 平台
   const cookieCapable = COOKIE_LOGIN_PROVIDERS.includes(pid);
-  $('authGoRow').classList.toggle('hidden', !cookieCapable);
+  $('authGoRow').classList.remove('hidden');
+  $('authGoBtn').textContent = cookieCapable ? '去官网授权' : '去官网获取密钥';
+  $('authSyncBtn').classList.toggle('hidden', !cookieCapable);
   $('authTip').innerHTML = cookieCapable
     ? '登录官网后点「我已授权 · 保存会话」会连接<b>本机正在运行的 Chrome</b>读取会话。首次需用 <code>--remote-debugging-port=9222</code> 重启一次 Chrome（点保存会话失败时会提示命令）；也可手动粘贴下面字段。'
-    : '该平台用🔑密钥鉴权：在官网控制台获取密钥后粘贴到下面保存即可（无需浏览器 Cookie）。';
+    : '该平台用🔑密钥鉴权：点「去官网获取密钥」到控制台拿 AK/SK 或 API Key，粘贴到下面保存即可（无需浏览器 Cookie）。';
   const list = $('authList');
   const rows = pv.fields.map((f) => `
     <div class="auth-field">
