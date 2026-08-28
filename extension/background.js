@@ -119,3 +119,37 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 });
+
+// 4) 定时兜底：每 1 分钟读 cookie 指纹对比，变化则推（service worker 休眠导致 onChanged 丢失时兜底）
+async function fingerprint() {
+  const arkList = await allCookiesFor('volcengine.com', ['https://volcengine.com', 'https://console.volcengine.com']);
+  const mmList = await allCookiesFor('minimaxi.com');
+  const zpList = await allCookiesFor('bigmodel.cn');
+  const zpTok = zpList.find((c) => c.name === 'bigmodel_token_production');
+  return {
+    ark: arkList.map((c) => `${c.name}=${c.value}`).join('; '),
+    minimax: mmList.map((c) => `${c.name}=${c.value}`).join('; '),
+    zhipu: zpTok ? zpTok.value : '',
+  };
+}
+
+async function checkAndSync() {
+  const cfg = await getConfig();
+  if (!cfg.dashboard) return;
+  const prev = (await chrome.storage.local.get(['lastValues'])).lastValues || {};
+  const fp = await fingerprint();
+  if (fp.ark && fp.ark !== prev.ark) await syncArk(true);
+  if (fp.minimax && fp.minimax !== prev.minimax) await syncMinimax(true);
+  if (fp.zhipu && fp.zhipu !== prev.zhipu) await syncZhipu(true);
+  await chrome.storage.local.set({ lastValues: fp });
+}
+
+try {
+  chrome.alarms.create('quota-check', { periodInMinutes: 1 }).catch(() => {});
+} catch {
+  /* ignore */
+}
+chrome.alarms.onAlarm.addListener((a) => {
+  if (a.name === 'quota-check') checkAndSync();
+});
+checkAndSync(); // service worker 启动时立即查一次
