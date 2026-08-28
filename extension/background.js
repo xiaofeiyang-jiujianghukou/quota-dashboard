@@ -92,12 +92,14 @@ async function syncArk(force = false) {
 /** MiniMax：cookie → sessionCookie + groupId（_token 是登录核心，必须存在才推） */
 async function syncMinimax(force = false) {
   const list = await allCookiesFor('minimaxi.com');
+  console.log('[诊断] MiniMax 读到 cookie 数:', list.length, '| 有 _token:', list.some((c) => c.name === '_token'));
   const hasToken = list.some((c) => c.name === '_token');
   if (!hasToken) {
     console.log('[会话同步] MiniMax cookie 尚不完整（缺 _token），跳过，等下一轮兜底');
     return;
   }
   const fields = { sessionCookie: list.map((c) => `${c.name}=${c.value}`).join('; ') };
+  console.log('[诊断] MiniMax sessionCookie 长度:', fields.sessionCookie.length);
   const g = list.find((c) => c.name === 'minimax_group_id_v2');
   if (g) fields.groupId = g.value;
   await push('minimax', fields, force);
@@ -106,8 +108,12 @@ async function syncMinimax(force = false) {
 /** 智谱：bigmodel_token_production（JWT）→ sessionToken */
 async function syncZhipu(force = false) {
   const list = await allCookiesFor('bigmodel.cn');
+  console.log('[诊断] 智谱 读到 cookie 数:', list.length, '| 有 bigmodel_token_production:', list.some((c) => c.name === 'bigmodel_token_production'));
   const tok = list.find((c) => c.name === 'bigmodel_token_production');
-  if (tok) await push('zhipu', { sessionToken: tok.value }, force);
+  if (tok) {
+    console.log('[诊断] 智谱 sessionToken 长度:', tok.value.length);
+    await push('zhipu', { sessionToken: tok.value }, force);
+  }
 }
 
 // 登录时 cookie 变化 → 防抖后自动同步（等连续 3 秒无新 cookie 写入，说明已写完，立即触发）
