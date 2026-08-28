@@ -11,8 +11,8 @@ services:
     ports:
       - "127.0.0.1:8899:8899"
     volumes:
-      # 密钥配置：改 config.json 后点看板"立即刷新"即热加载（只读挂载更安全）
-      - ./config.json:/app/config.json:ro
+      # 密钥/会话配置：改 config.json 后点看板"立即刷新"即热加载；需可写以支持扩展远程同步会话
+      - ./config.json:/app/config.json
       # 提醒状态持久化
       - ./data:/app/data
       # 微信提醒授权状态持久化（wecom-cli 的 credentials）
