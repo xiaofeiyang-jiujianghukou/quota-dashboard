@@ -227,6 +227,7 @@
         <option value="300">5 分钟</option>
         <option value="600">10 分钟</option>
       </select>
+      <button id="deskBtn" title="浏览器桌面通知：页面开着（含后台标签）即弹系统通知">🔕 桌面提醒</button>
       <button id="wecomBtn" title="微信提醒扫码授权与测试">🔔 微信提醒</button>
       <button id="refreshBtn">立即刷新</button>
     </div>
@@ -628,6 +629,7 @@ async function fetchQuota(force) {
     state = await res.json();
     render();
     refreshAuthInfo(); // 采集后刷新登录凭据状态（登录失效会反映到卡片）
+    pollDesktopAlerts(); // 新提醒 → 浏览器桌面通知
   } catch (e) {
     $('grid').innerHTML = `<div class="empty">请求失败：${escapeHtml(e.message)}<br/>请确认服务已启动（node server.js）</div>`;
   } finally {
@@ -642,6 +644,63 @@ async function fetchStatus() {
     statusInfo = await res.json();
   } catch { /* ignore */ }
 }
+
+// ---- 桌面通知（浏览器 Notification API）----
+let alertLastSeen = Number(localStorage.getItem('quotaAlertLastSeen') || 0) || Date.now();
+localStorage.setItem('quotaAlertLastSeen', String(alertLastSeen));
+
+function deskBtnRender() {
+  const b = $('deskBtn');
+  if (!('Notification' in window)) {
+    b.textContent = '🔕 不支持';
+    b.disabled = true;
+    b.title = '当前浏览器不支持桌面通知';
+    return;
+  }
+  if (Notification.permission === 'granted') {
+    b.textContent = '🔔 桌面提醒开';
+    b.title = '桌面通知已开启，页面开着（含后台标签）即弹系统通知';
+  } else if (Notification.permission === 'denied') {
+    b.textContent = '🔕 已被拒绝';
+    b.title = '浏览器已拒绝通知权限：地址栏 🔒/ⓘ → 通知 → 允许';
+  } else {
+    b.textContent = '🔕 桌面提醒';
+    b.title = '点击开启浏览器桌面通知';
+  }
+}
+
+$('deskBtn').addEventListener('click', async () => {
+  if (!('Notification' in window) || Notification.permission === 'granted') return;
+  try { await Notification.requestPermission(); } catch { /* ignore */ }
+  deskBtnRender();
+});
+
+/** 拉取最近已发送提醒，新提醒弹桌面通知（只弹 30 分钟内的，重开页面不重放旧提醒） */
+async function pollDesktopAlerts() {
+  try {
+    const res = await fetch('/api/alerts/recent?since=' + alertLastSeen);
+    if (!res.ok) return;
+    const { alerts = [] } = await res.json();
+    const cutoff = Date.now() - 30 * 60 * 1000;
+    for (const a of alerts) {
+      if (a.atMs <= cutoff) continue;
+      if (!('Notification' in window) || Notification.permission !== 'granted') continue;
+      try {
+        const n = new Notification('AI 套餐提醒', {
+          body: String(a.text).replace(/^- /, '').replace(/\*\*/g, ''),
+          tag: String(a.atMs),
+        });
+        n.onclick = () => { window.focus(); n.close(); };
+      } catch { /* ignore */ }
+    }
+    const maxTs = alerts.reduce((m, a) => Math.max(m, a.atMs || 0), 0);
+    if (maxTs > alertLastSeen) {
+      alertLastSeen = maxTs;
+      localStorage.setItem('quotaAlertLastSeen', String(maxTs));
+    }
+  } catch { /* ignore */ }
+}
+deskBtnRender();
 
 function armTimer() {
   const sec = Number($('interval').value);

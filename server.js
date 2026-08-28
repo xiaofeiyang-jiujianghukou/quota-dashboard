@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadConfig, providerStatus, ROOT_DIR } from './lib/config.js';
 import { collectAll } from './lib/runner.js';
-import { evaluateAlerts, alertStatus } from './lib/alert.js';
+import { evaluateAlerts, alertStatus, recentAlerts } from './lib/alert.js';
 import * as wecom from './lib/wecom.js';
 import { authStatus, updateAuth } from './lib/auth.js';
 // login 模块懒加载（未安装 playwright 时自动登录降级，不影响看板）
@@ -100,6 +100,12 @@ const server = http.createServer(async (req, res) => {
         providers: providerStatus(cfg),
         alert: alertStatus(cfg),
       });
+      return;
+    }
+    if (req.method === 'GET' && pathname === '/api/alerts/recent') {
+      // 最近已发送的提醒（看板页面拉取后弹浏览器桌面通知）
+      const since = Number(url.searchParams.get('since')) || 0;
+      sendJson(res, 200, { alerts: recentAlerts(since) });
       return;
     }
     if (req.method === 'GET' && pathname === '/api/wecom/status') {
