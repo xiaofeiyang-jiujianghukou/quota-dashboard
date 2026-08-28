@@ -110,15 +110,15 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
   ['requestHeaders']
 );
 
-// 3) 「立即同步」：直接读 cookie 推方舟/MiniMax；智谱需打开页面触发 JWT 拦截
+// 3) 「立即同步」：清掉节流 → 直接读 cookie 推方舟/MiniMax → 打开智谱页面触发 JWT 拦截
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'sync-all') {
-    Promise.all([syncArk(true), syncMinimax(true)])
-      .then(() => {
-        chrome.tabs.create({ url: 'https://open.bigmodel.cn/coding-plan/personal/overview', active: false });
-        sendResponse({ ok: true });
-      })
-      .catch(() => sendResponse({ ok: false }));
+    (async () => {
+      await chrome.storage.local.set({ lastSync: {} }); // 清节流，确保本次全量同步（含智谱）
+      await Promise.all([syncArk(true), syncMinimax(true)]);
+      chrome.tabs.create({ url: 'https://open.bigmodel.cn/coding-plan/personal/overview', active: false });
+      sendResponse({ ok: true });
+    })();
     return true;
   }
 });
