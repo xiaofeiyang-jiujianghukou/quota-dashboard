@@ -72,45 +72,45 @@ async function allCookiesFor(domainSuffix, partitionSites = []) {
   return out;
 }
 
-/** 方舟：cookie → sessionCookie + csrfToken + webId（userInfo/digest 是登录核心，必须都在才推，避免登录过程中推不完整） */
+/** 方舟：cookie → sessionCookie + csrfToken + webId（userInfo/digest 是登录核心，值非空才推） */
 async function syncArk(force = false) {
   const list = await allCookiesFor('volcengine.com', ['https://volcengine.com', 'https://console.volcengine.com']);
-  const hasUserInfo = list.some((c) => c.name === 'userInfo');
-  const hasDigest = list.some((c) => c.name === 'digest');
-  if (!hasUserInfo || !hasDigest) {
-    console.log('[会话同步] 方舟 cookie 尚不完整（缺 userInfo/digest），跳过，等下一轮兜底');
+  const userInfo = list.find((c) => c.name === 'userInfo');
+  const digest = list.find((c) => c.name === 'digest');
+  if (!userInfo || !digest || !userInfo.value || !digest.value) {
+    console.log('[会话同步] 方舟 cookie 尚不完整（缺 userInfo/digest 或其值为空），跳过，等下一轮兜底');
     return;
   }
   const fields = { sessionCookie: list.map((c) => `${c.name}=${c.value}`).join('; ') };
   const csrf = list.find((c) => c.name === 'csrfToken');
-  if (csrf) fields.csrfToken = csrf.value;
+  if (csrf && csrf.value) fields.csrfToken = csrf.value;
   const webId = list.find((c) => c.name === 's_v_web_id' || c.name === 'monitor_huoshan_web_id');
-  if (webId) fields.webId = webId.value;
+  if (webId && webId.value) fields.webId = webId.value;
   await push('ark', fields, force);
 }
 
-/** MiniMax：cookie → sessionCookie + groupId（_token 是登录核心，必须存在才推） */
+/** MiniMax：cookie → sessionCookie + groupId（_token 值非空才推） */
 async function syncMinimax(force = false) {
   const list = await allCookiesFor('minimaxi.com');
   console.log('[诊断] MiniMax 读到 cookie 数:', list.length, '| 有 _token:', list.some((c) => c.name === '_token'));
-  const hasToken = list.some((c) => c.name === '_token');
-  if (!hasToken) {
-    console.log('[会话同步] MiniMax cookie 尚不完整（缺 _token），跳过，等下一轮兜底');
+  const tok = list.find((c) => c.name === '_token');
+  if (!tok || !tok.value) {
+    console.log('[会话同步] MiniMax cookie 尚不完整（缺 _token 或其值为空），跳过，等下一轮兜底');
     return;
   }
   const fields = { sessionCookie: list.map((c) => `${c.name}=${c.value}`).join('; ') };
   console.log('[诊断] MiniMax sessionCookie 长度:', fields.sessionCookie.length);
   const g = list.find((c) => c.name === 'minimax_group_id_v2');
-  if (g) fields.groupId = g.value;
+  if (g && g.value) fields.groupId = g.value;
   await push('minimax', fields, force);
 }
 
-/** 智谱：bigmodel_token_production（JWT）→ sessionToken */
+/** 智谱：bigmodel_token_production（JWT）→ sessionToken（值非空才推） */
 async function syncZhipu(force = false) {
   const list = await allCookiesFor('bigmodel.cn');
   console.log('[诊断] 智谱 读到 cookie 数:', list.length, '| 有 bigmodel_token_production:', list.some((c) => c.name === 'bigmodel_token_production'));
   const tok = list.find((c) => c.name === 'bigmodel_token_production');
-  if (tok) {
+  if (tok && tok.value) {
     console.log('[诊断] 智谱 sessionToken 长度:', tok.value.length);
     await push('zhipu', { sessionToken: tok.value }, force);
   }
@@ -178,4 +178,4 @@ try {
 chrome.alarms.onAlarm.addListener((a) => {
   if (a.name === 'quota-check') checkAndSync();
 });
-checkAndSync(); // service worker 启动时立即查一次
+setTimeout(checkAndSync, 3000); // service worker 冷启动后延迟 3 秒再查，等 cookies API 就绪
