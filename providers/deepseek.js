@@ -163,6 +163,16 @@ function pct(cur, prev) {
   return (d >= 0 ? '+' : '') + d.toFixed(1) + '%';
 }
 
+/** 高峰时段：北京时间周一至周五 9:00-12:00、14:00-18:00（其余为空闲；空闲价格为高峰一半）。
+ *  接口按整点小时桶返回，窗口边界均落在整点，按桶起点判定即可。 */
+function isPeakBucket(timeSec) {
+  const bj = new Date((timeSec + 8 * 3600) * 1000);
+  const wd = bj.getUTCDay(); // 0=周日
+  if (wd === 0 || wd === 6) return false;
+  const h = bj.getUTCHours();
+  return (h >= 9 && h < 12) || (h >= 14 && h < 18);
+}
+
 async function fetchUsage(p, timeoutMs) {
   const now = Math.floor(Date.now() / 1000);
   const d8 = new Date((now + 8 * 3600) * 1000);
@@ -199,12 +209,35 @@ async function fetchUsage(p, timeoutMs) {
   const weekTok = sum(tokCur, weekStart, tomorrow);
   const monthTok = sum(tokCur, monthStart, nextMonth);
 
+  // 今日分时（小时桶）：高峰=工作日 9-12 / 14-18，其余为空闲
+  const costHourly = aggCost(await fetchJson(`https://platform.deepseek.com/api/v0/usage/by_api_key/cost?start=${today}&end=${tomorrow}&tz=28800`, p, timeoutMs));
+  const tokHourly = aggToken(await fetchJson(`https://platform.deepseek.com/api/v0/usage/by_api_key/amount?start=${today}&end=${tomorrow}&tz=28800`, p, timeoutMs));
+  const peak = { cost: 0, tok: 0 };
+  const idle = { cost: 0, tok: 0 };
+  for (const [t, v] of Object.entries(costHourly)) (isPeakBucket(Number(t)) ? peak : idle).cost += v;
+  for (const [t, v] of Object.entries(tokHourly)) (isPeakBucket(Number(t)) ? peak : idle).tok += v;
+
   const items = [];
   items.push({
     key: 'deepseek-usage-today',
     title: '今日消费',
     kind: 'info',
     extra: { note: `${fmtMoney(todayCost)} · ${fmtToken(todayTok)} token · 环比昨日 ${pct(todayCost, yesterdayCost)}` },
+  });
+  const splitTotal = peak.cost + idle.cost;
+  items.push({
+    key: 'deepseek-usage-today-split',
+    title: '今日分时',
+    kind: 'info',
+    extra: {
+      note:
+        `高峰 ¥${peak.cost.toFixed(2)} · ${fmtToken(peak.tok)} token ｜ 空闲 ¥${idle.cost.toFixed(2)} · ${fmtToken(idle.tok)} token` +
+        (splitTotal > 0 ? ` · 峰时占 ${((peak.cost / splitTotal) * 100).toFixed(0)}%` : ''),
+      peakCost: +peak.cost.toFixed(2),
+      idleCost: +idle.cost.toFixed(2),
+      peakToken: peak.tok,
+      idleToken: idle.tok,
+    },
   });
   items.push({
     key: 'deepseek-usage-week',
