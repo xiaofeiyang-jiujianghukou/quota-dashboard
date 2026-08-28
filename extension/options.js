@@ -46,10 +46,10 @@ async function test() {
 }
 
 async function syncNow() {
-  show('正在打开平台页面触发同步…');
+  show('正在同步…');
   try {
     const res = await chrome.runtime.sendMessage({ type: 'sync-all' });
-    show(res && res.ok ? '✅ 已在后台打开方舟/智谱/MiniMax 页面，几秒后刷新看板即可看到结果' : '同步失败', res && res.ok ? 'ok' : 'err');
+    show(res && res.ok ? '✅ 方舟/MiniMax 已直接读 cookie 同步；智谱已打开后台页面抓取。几秒后刷新看板看结果' : '同步失败', res && res.ok ? 'ok' : 'err');
   } catch (e) {
     show('同步失败：' + e.message, 'err');
   }
