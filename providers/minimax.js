@@ -7,7 +7,7 @@
 //   - start_time/end_time 为毫秒级 epoch（>1e12 自动识别）
 //   - 订阅 Key 与普通按量计费 API Key 相互独立、不能混用；普通 Key 调此接口 total 恒为 0
 import { toNum, epochToISO } from './util.js';
-import { planPrice, planPriceNum } from '../lib/pricing.js';
+import { planPrice, planPriceNum, planQuotaText } from '../lib/pricing.js';
 
 export const id = 'minimax';
 export const name = 'MiniMax';
