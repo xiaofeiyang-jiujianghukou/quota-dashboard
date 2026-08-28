@@ -278,5 +278,31 @@ async function fetchUsage(p, timeoutMs) {
       budgetMonthly: toNum(p.budgetMonthly),
     },
   });
+
+  // 本月单日最高 / 日均（仅统计有调用的天数，0 消费日不计入）
+  const dayMap = {}; // 北京日序号 → 当日消费
+  for (const [t, v] of Object.entries(costCur)) {
+    const k = Math.floor((Number(t) + 8 * 3600) / 86400);
+    if (Number(t) >= monthStart && Number(t) < nextMonth) dayMap[k] = (dayMap[k] || 0) + v;
+  }
+  const activeDays = Object.entries(dayMap).filter(([, v]) => v > 0);
+  const maxDay = activeDays.reduce((m, [k, v]) => (v > m.v ? { k, v } : m), { k: 0, v: -1 });
+  const avgDaily = activeDays.length
+    ? activeDays.reduce((s, [, v]) => s + v, 0) / activeDays.length
+    : 0;
+  const maxDate = maxDay.v > 0 ? new Date((maxDay.k * 86400 + 8 * 3600) * 1000) : null;
+  items.push({
+    key: 'deepseek-usage-month-daily',
+    title: '本月日均/最高',
+    kind: 'info',
+    extra: {
+      note: maxDate
+        ? `日均 ${fmtMoney(avgDaily)}（${activeDays.length} 个调用日，0 消费日不计）· 单日最高 ${fmtMoney(maxDay.v)}（${maxDate.getUTCMonth() + 1}月${maxDate.getUTCDate()}日）`
+        : '本月暂无消费',
+      avgDailyCost: +avgDaily.toFixed(2),
+      maxDailyCost: maxDay.v > 0 ? +maxDay.v.toFixed(2) : 0,
+      activeDays: activeDays.length,
+    },
+  });
   return items;
 }
