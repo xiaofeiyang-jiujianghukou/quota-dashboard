@@ -47,6 +47,9 @@
     "deepseek": {
       "enabled": true,
       "apiKey": "",
+      "sessionToken": "",
+      "sessionCookie": "",
+      "budgetMonthly": 0,
       "expiresAt": ""
     }
   },

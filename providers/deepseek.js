@@ -1,8 +1,8 @@
-// DeepSeek — 账户余额
-// 数据源（官方文档 api-docs.deepseek.com/api/get-user-balance）:
-//   GET https://api.deepseek.com/user/balance   (Authorization: Bearer <API Key>)
-// 返回: { is_available, balance_infos: [{ currency, total_balance, granted_balance, topped_up_balance }] }
-// 注: DeepSeek 为预充值余额制，余额无到期时间（赠金可能有有效期，接口只返回未过期赠金）
+// DeepSeek — 账户余额 + 控制台消费统计（当天/当周/当月 + 环比）
+// 余额（官方 API）: GET https://api.deepseek.com/user/balance  (Authorization: Bearer <API Key>)
+// 消费（控制台接口，需会话）: GET https://platform.deepseek.com/api/v0/usage/by_api_key/{cost|amount}
+//   参数 start/end（秒级 epoch）/tz（时区偏移秒）；接口单次跨度 ≤ 约 30 天，环比上月需单独查上月。
+//   cost 返回 biz_data.data[].series[].buckets[].cost；amount 返回 biz_data.series[].buckets[].usage{...}
 import { toNum } from './util.js';
 
 export const id = 'deepseek';
@@ -25,6 +25,7 @@ export async function collect(cfg) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
+    // 余额
     const res = await fetch('https://api.deepseek.com/user/balance', {
       headers: { Authorization: `Bearer ${p.apiKey}` },
       signal: controller.signal,
@@ -61,10 +62,169 @@ export async function collect(cfg) {
         },
       };
     });
+
+    // 消费统计（需要控制台会话）
+    if (p.sessionToken && p.sessionCookie) {
+      try {
+        const usage = await fetchUsage(p, timeoutMs);
+        items.push(...usage);
+      } catch (e) {
+        items.push({
+          key: 'deepseek-usage-error',
+          title: '消费统计',
+          kind: 'info',
+          extra: { note: '获取失败：' + e.message },
+        });
+      }
+    }
     return { ok: true, items };
   } catch (e) {
     return { ok: false, items: [], error: e.message, detail: 'https://api.deepseek.com/user/balance' };
   } finally {
     clearTimeout(timer);
   }
+}
+
+// ---- 控制台消费统计 ----
+
+function headers(p) {
+  return {
+    accept: '*/*',
+    'accept-language': 'zh-CN,zh;q=0.9',
+    authorization: `Bearer ${p.sessionToken}`,
+    cookie: p.sessionCookie,
+    referer: 'https://platform.deepseek.com/usage',
+    'user-agent': 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Mobile Safari/537.36',
+    'x-client-platform': 'web',
+    'x-client-timezone-offset': '28800',
+    'x-client-version': '1.0.0',
+  };
+}
+
+async function fetchJson(url, p, timeoutMs) {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const r = await fetch(url, { headers: headers(p), signal: controller.signal });
+    const j = await r.json().catch(() => null);
+    return (j && j.data && j.data.biz_data) || {};
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/** cost 聚合：biz_data.data[].series[].buckets[].cost → { time: 总值 } */
+function aggCost(bd) {
+  const d = {};
+  for (const g of bd.data || []) {
+    for (const s of g.series || []) {
+      for (const b of s.buckets || []) {
+        d[b.time] = (d[b.time] || 0) + toNum(b.cost);
+      }
+    }
+  }
+  return d;
+}
+
+/** amount 聚合：biz_data.series[].buckets[].usage{...} → { time: 总 token } */
+function aggToken(bd) {
+  const d = {};
+  for (const s of bd.series || []) {
+    for (const b of s.buckets || []) {
+      const u = b.usage || {};
+      let t = 0;
+      for (const v of Object.values(u)) t += toNum(v);
+      d[b.time] = (d[b.time] || 0) + t;
+    }
+  }
+  return d;
+}
+
+function sum(d, a, b) {
+  let s = 0;
+  for (const [t, v] of Object.entries(d)) {
+    const tt = Number(t);
+    if (tt >= a && tt < b) s += v;
+  }
+  return s;
+}
+
+function fmtMoney(v) {
+  return '¥' + v.toFixed(2);
+}
+function fmtToken(v) {
+  if (v >= 1e8) return (v / 1e8).toFixed(2) + ' 亿';
+  if (v >= 1e4) return (v / 1e4).toFixed(0) + ' 万';
+  return String(Math.round(v));
+}
+function pct(cur, prev) {
+  if (!prev) return cur > 0 ? '新增' : '—';
+  const d = ((cur - prev) / prev) * 100;
+  return (d >= 0 ? '+' : '') + d.toFixed(1) + '%';
+}
+
+async function fetchUsage(p, timeoutMs) {
+  const now = Math.floor(Date.now() / 1000);
+  const d8 = new Date((now + 8 * 3600) * 1000);
+  const Y = d8.getUTCFullYear();
+  const M = d8.getUTCMonth() + 1;
+  const D = d8.getUTCDate();
+  const wd = d8.getUTCDay(); // 0=周日
+  const ds = (yy, mm, dd) => Math.floor((Date.UTC(yy, mm - 1, dd) - 8 * 3600 * 1000) / 1000);
+
+  const monthStart = ds(Y, M, 1);
+  const nextMonth = ds(Y, M + 1, 1);
+  const lastMonth = ds(Y, M - 1, 1);
+  const today = ds(Y, M, D);
+  const tomorrow = ds(Y, M, D + 1);
+  const yesterday = ds(Y, M, D - 1);
+  const mondayOffset = (wd + 6) % 7;
+  const weekStart = ds(Y, M, D - mondayOffset);
+  const lastWeekStart = ds(Y, M, D - mondayOffset - 7);
+
+  // 消费：查本月 + 上月（各 ≤ 30 天）
+  const costCur = aggCost(await fetchJson(`https://platform.deepseek.com/api/v0/usage/by_api_key/cost?start=${monthStart}&end=${nextMonth}&tz=28800`, p, timeoutMs));
+  const costPrev = aggCost(await fetchJson(`https://platform.deepseek.com/api/v0/usage/by_api_key/cost?start=${lastMonth}&end=${monthStart}&tz=28800`, p, timeoutMs));
+  const tokCur = aggToken(await fetchJson(`https://platform.deepseek.com/api/v0/usage/by_api_key/amount?start=${monthStart}&end=${nextMonth}&tz=28800`, p, timeoutMs));
+  const tokPrev = aggToken(await fetchJson(`https://platform.deepseek.com/api/v0/usage/by_api_key/amount?start=${lastMonth}&end=${monthStart}&tz=28800`, p, timeoutMs));
+
+  const todayCost = sum(costCur, today, tomorrow);
+  const yesterdayCost = sum(costCur, yesterday, today);
+  const weekCost = sum(costCur, weekStart, tomorrow);
+  const lastWeekCost = sum(costCur, lastWeekStart, weekStart) + sum(costPrev, lastWeekStart, monthStart);
+  const monthCost = sum(costCur, monthStart, nextMonth);
+  const lastMonthCost = sum(costPrev, lastMonth, monthStart);
+
+  const todayTok = sum(tokCur, today, tomorrow);
+  const weekTok = sum(tokCur, weekStart, tomorrow);
+  const monthTok = sum(tokCur, monthStart, nextMonth);
+
+  const items = [];
+  items.push({
+    key: 'deepseek-usage-today',
+    title: '今日消费',
+    kind: 'info',
+    extra: { note: `${fmtMoney(todayCost)} · ${fmtToken(todayTok)} token · 环比昨日 ${pct(todayCost, yesterdayCost)}` },
+  });
+  items.push({
+    key: 'deepseek-usage-week',
+    title: '本周消费',
+    kind: 'info',
+    extra: { note: `${fmtMoney(weekCost)} · ${fmtToken(weekTok)} token · 环比上周 ${pct(weekCost, lastWeekCost)}` },
+  });
+  items.push({
+    key: 'deepseek-usage-month',
+    title: '本月消费',
+    kind: 'info',
+    extra: {
+      note:
+        `${fmtMoney(monthCost)} · ${fmtToken(monthTok)} token · 环比上月 ${pct(monthCost, lastMonthCost)}` +
+        (p.budgetMonthly > 0
+          ? ` · 预算 ${fmtMoney(p.budgetMonthly)} ${((monthCost / p.budgetMonthly) * 100).toFixed(0)}%`
+          : ''),
+      monthCost,
+      budgetMonthly: toNum(p.budgetMonthly),
+    },
+  });
+  return items;
 }
