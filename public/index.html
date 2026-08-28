@@ -816,7 +816,7 @@ async function renderAuth(pid) {
     <div class="auth-field">
       <div class="auth-field-head">
         <span class="auth-label">${escapeHtml(f.label)} <em class="${f.configured ? 'ok' : ''}">${f.configured ? '已配置 · ' + escapeHtml(f.masked) : '未配置'}</em></span>
-        <span class="auth-type">${f.type === 'cookie' ? '🍪 Cookie' : '🔑 密钥'}</span>
+        <span class="auth-type">${f.type === 'cookie' ? '🍪 Cookie' : f.type === 'number' ? '⚙️ 配置' : '🔑 密钥'}</span>
       </div>
       <div class="auth-input-row">
         <input type="password" data-field="${escapeHtml(f.key)}" placeholder="${f.configured ? '已配置，如需更新请粘贴新值' : '粘贴 ' + escapeHtml(f.label)}" autocomplete="off" />
