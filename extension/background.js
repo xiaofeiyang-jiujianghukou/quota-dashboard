@@ -72,9 +72,15 @@ async function allCookiesFor(domainSuffix, partitionSites = []) {
   return out;
 }
 
-/** 方舟：cookie → sessionCookie + csrfToken + webId */
+/** 方舟：cookie → sessionCookie + csrfToken + webId（userInfo/digest 是登录核心，必须都在才推，避免登录过程中推不完整） */
 async function syncArk(force = false) {
   const list = await allCookiesFor('volcengine.com', ['https://volcengine.com', 'https://console.volcengine.com']);
+  const hasUserInfo = list.some((c) => c.name === 'userInfo');
+  const hasDigest = list.some((c) => c.name === 'digest');
+  if (!hasUserInfo || !hasDigest) {
+    console.log('[会话同步] 方舟 cookie 尚不完整（缺 userInfo/digest），跳过，等下一轮兜底');
+    return;
+  }
   const fields = { sessionCookie: list.map((c) => `${c.name}=${c.value}`).join('; ') };
   const csrf = list.find((c) => c.name === 'csrfToken');
   if (csrf) fields.csrfToken = csrf.value;
@@ -83,9 +89,14 @@ async function syncArk(force = false) {
   await push('ark', fields, force);
 }
 
-/** MiniMax：cookie → sessionCookie + groupId */
+/** MiniMax：cookie → sessionCookie + groupId（_token 是登录核心，必须存在才推） */
 async function syncMinimax(force = false) {
   const list = await allCookiesFor('minimaxi.com');
+  const hasToken = list.some((c) => c.name === '_token');
+  if (!hasToken) {
+    console.log('[会话同步] MiniMax cookie 尚不完整（缺 _token），跳过，等下一轮兜底');
+    return;
+  }
   const fields = { sessionCookie: list.map((c) => `${c.name}=${c.value}`).join('; ') };
   const g = list.find((c) => c.name === 'minimax_group_id_v2');
   if (g) fields.groupId = g.value;
