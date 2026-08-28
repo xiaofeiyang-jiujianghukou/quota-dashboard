@@ -3,7 +3,7 @@
   "name": "AI 套餐看板 · 会话同步",
   "version": "1.0.0",
   "description": "登录方舟 / 智谱 / MiniMax 后，自动把控制台会话同步到你的云端 AI 套餐余量看板（零操作）。",
-  "permissions": ["cookies", "webRequest", "storage", "tabs"],
+  "permissions": ["cookies", "storage"],
   "host_permissions": [
     "*://*.volcengine.com/*",
     "*://*.bigmodel.cn/*",

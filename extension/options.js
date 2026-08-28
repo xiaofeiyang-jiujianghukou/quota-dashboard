@@ -49,7 +49,7 @@ async function syncNow() {
   show('正在同步…');
   try {
     const res = await chrome.runtime.sendMessage({ type: 'sync-all' });
-    show(res && res.ok ? '✅ 方舟/MiniMax 已直接读 cookie 同步；智谱已打开后台页面抓取。几秒后刷新看板看结果' : '同步失败', res && res.ok ? 'ok' : 'err');
+    show(res && res.ok ? '✅ 三平台会话已静默同步（无需打开页面），刷新看板看结果' : '同步失败', res && res.ok ? 'ok' : 'err');
   } catch (e) {
     show('同步失败：' + e.message, 'err');
   }
