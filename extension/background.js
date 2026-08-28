@@ -4,6 +4,7 @@
 // 注意：不能用 chrome.cookies.getAll —— 它读不到「分区 cookie」（如方舟的 userInfo/digest）。
 
 const SYNC_INTERVAL_MS = 10 * 60 * 1000; // 同平台 10 分钟内去重
+const pending = new Set(); // 并发去重（同一平台同时多次触发只推一次）
 
 async function getConfig() {
   const cfg = await chrome.storage.local.get(['dashboard', 'token', 'lastSync']);
@@ -19,8 +20,9 @@ async function push(providerId, fields, force = false) {
   if (!cfg.dashboard) return;
 
   const last = cfg.lastSync[providerId] || 0;
-  if (!force && Date.now() - last < SYNC_INTERVAL_MS) return;
+  if (!force && (Date.now() - last < SYNC_INTERVAL_MS || pending.has(providerId))) return;
 
+  pending.add(providerId);
   cfg.lastSync[providerId] = Date.now();
   await chrome.storage.local.set({ lastSync: cfg.lastSync });
 
@@ -38,6 +40,8 @@ async function push(providerId, fields, force = false) {
     else console.warn(`[会话同步] ${providerId} 推送被拒：${j.error || 'HTTP ' + res.status}`);
   } catch (e) {
     console.error(`[会话同步] ${providerId} 推送失败：`, e.message);
+  } finally {
+    pending.delete(providerId);
   }
 }
 
@@ -84,10 +88,10 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
   ['requestHeaders']
 );
 
-// 响应 options 的「立即同步」：打开各平台页面触发请求拦截
+// 响应 options 的「立即同步」：打开各平台页面触发请求拦截（方舟用前台标签页确保加载）
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'sync-all') {
-    chrome.tabs.create({ url: 'https://console.volcengine.com/ark/region:cn-beijing/subscription/coding-plan', active: false });
+    chrome.tabs.create({ url: 'https://console.volcengine.com/ark/region:cn-beijing/subscription/coding-plan', active: true });
     chrome.tabs.create({ url: 'https://open.bigmodel.cn/coding-plan/personal/overview', active: false });
     chrome.tabs.create({ url: 'https://platform.minimaxi.com/', active: false });
     sendResponse({ ok: true });
