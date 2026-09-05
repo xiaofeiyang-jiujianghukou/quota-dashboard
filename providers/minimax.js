@@ -105,12 +105,8 @@ export async function collect(cfg) {
       const total = toNum(m.current_interval_total_count);
       const remaining = toNum(m.current_interval_usage_count);
 
-      // 官方口径：5小时会话窗口「从第一次调用开始计时」（首调起算的滚动窗口）——
-      // 未调用则没有窗口，无"重置时刻"可言，不展示倒计时、不触发恢复提醒；
-      // 一旦发生过调用（哪怕极少量），窗口即开启，此时用 API 返回的 end_time 显示窗口结束/重置时刻。
-      const intervalUsed = intervalRemPct != null ? 100 - intervalRemPct : 0;
-      const weeklyUsed = weeklyRemainPct != null ? 100 - weeklyRemainPct : 0;
-      const TOUCHED = 0; // 只要发生过调用（余量 <100%）即视为窗口已开启
+      // 窗口/倒计时完全跟随官方接口数值：end_time = 官方 5 小时窗口结束时刻（无论是否使用，
+      // 官方都维护固定 5 小时槽，remains_time 持续倒数）。恢复「提醒」是否触发另由 usage 决定。
 
       // 与其他平台一致：一个模型按"窗口"拆成多行展示（MiniMax 每模型有 5小时会话窗口 + 每周 两组）
       // —— 5 小时窗口行（主额度）
@@ -121,14 +117,12 @@ export async function collect(cfg) {
         planName: subPlanName,
         priceText: planPrice(cfg, 'minimax', (p.planName || subPlanName).toLowerCase()),
         price: planPriceNum(cfg, 'minimax', (p.planName || subPlanName).toLowerCase()),
+        resetAt: epochToISO(m.end_time),
+        resetLabel: '5 小时重置',
         expiresAt: subExpiry,
         quotaText: subQuota || planQuotaText(cfg, 'minimax', (p.planName || subPlanName).toLowerCase()),
         extra: { status: statusText },
       };
-      if (intervalUsed > TOUCHED) {
-        fiveHour.resetAt = epochToISO(m.end_time);
-        fiveHour.resetLabel = '5 小时重置';
-      }
       if (intervalRemPct != null) {
         fiveHour.remainingPercent = intervalRemPct;
         fiveHour.percentUsed = 100 - intervalRemPct;
@@ -151,14 +145,12 @@ export async function collect(cfg) {
           planName: subPlanName,
           priceText: planPrice(cfg, 'minimax', (p.planName || subPlanName).toLowerCase()),
           price: planPriceNum(cfg, 'minimax', (p.planName || subPlanName).toLowerCase()),
+          resetAt: epochToISO(m.weekly_end_time),
+          resetLabel: '每周重置',
           expiresAt: subExpiry,
           quotaText: subQuota || planQuotaText(cfg, 'minimax', (p.planName || subPlanName).toLowerCase()),
           extra: { status: statusText },
         };
-        if (weeklyUsed > TOUCHED) {
-          weekly.resetAt = epochToISO(m.weekly_end_time);
-          weekly.resetLabel = '每周重置';
-        }
         weekly.remainingPercent = weeklyRemainPct;
         weekly.percentUsed = 100 - weeklyRemainPct;
         weekly.unit = 'used';
