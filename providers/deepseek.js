@@ -8,6 +8,15 @@ import { toNum } from './util.js';
 export const id = 'deepseek';
 export const name = 'DeepSeek';
 
+// 官方模型价格（来源 https://api-docs.deepseek.com/zh-cn/quick_start/pricing，随官方调价更新）
+// 单位：元 / 百万 tokens；每行「闲时/高峰」——高峰=北京时间工作日 9:00-12:00、14:00-18:00，其余闲时半价
+const MODEL_PRICES = [
+  { model: 'deepseek-v4-flash', input: '¥1.5 / ¥3', output: '¥4.5 / ¥9', cacheHitInput: '¥0.05 / ¥0.10' },
+  { model: 'deepseek-v4-pro', input: '¥4.5 / ¥9', output: '¥13.5 / ¥27', cacheHitInput: '¥0.15 / ¥0.30' },
+  { model: 'deepseek-v4-flash-vision-exp', note: '与 v4-flash 同价（图像按 token 计费）' },
+];
+const PRICING_AS_OF = '2026-09-05';
+
 export async function collect(cfg) {
   const p = cfg.providers.deepseek;
   if (!p.enabled) return { ok: false, skipped: true, items: [] };
@@ -76,6 +85,25 @@ export async function collect(cfg) {
           extra: { note: '获取失败：' + e.message },
         });
       }
+    }
+    // 官方模型价格（静态条目，随 MODEL_PRICES 更新；便于免去官网查询）
+    items.push({
+      key: 'deepseek-pricing-header',
+      title: '模型价格 · 元/百万token',
+      kind: 'info',
+      extra: { note: `格式：闲时/高峰（高峰=工作日 9-12/14-18 北京时间，闲时半价）· 摘自官方定价页 ${PRICING_AS_OF}` },
+    });
+    for (const mp of MODEL_PRICES) {
+      items.push({
+        key: `deepseek-pricing-${mp.model}`,
+        title: mp.model,
+        kind: 'info',
+        extra: {
+          note: mp.note
+            ? mp.note
+            : `输入 ${mp.input}（缓存未命中）/ 缓存命中输入 ${mp.cacheHitInput} ｜ 输出 ${mp.output}`,
+        },
+      });
     }
     return { ok: true, items };
   } catch (e) {

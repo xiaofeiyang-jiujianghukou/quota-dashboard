@@ -559,13 +559,15 @@ function render() {
     }
     let itemsHtml = '';
     if (pv.items.length) {
-      const all = expanded.has(pv.id);
+      // DeepSeek 卡片始终全展开（条目多且都是消费明细，不折叠）
+      const alwaysOpen = pv.id === 'deepseek';
+      const all = alwaysOpen || expanded.has(pv.id);
       const visible = all ? pv.items : pv.items.slice(0, COLLAPSE_AT);
       const hidden = pv.items.length - visible.length;
       itemsHtml = `<div class="items">${visible.map((it) => renderItem(it, accent).outerHTML).join('')}</div>`;
-      if (hidden > 0) {
+      if (!alwaysOpen && hidden > 0) {
         itemsHtml += `<div class="more-wrap"><button class="more-btn" data-pid="${escapeHtml(pv.id)}">展开全部 ${pv.items.length} 条（还有 ${hidden} 条）</button></div>`;
-      } else if (all && pv.items.length > COLLAPSE_AT) {
+      } else if (!alwaysOpen && all && pv.items.length > COLLAPSE_AT) {
         itemsHtml += `<div class="more-wrap"><button class="more-btn" data-pid="${escapeHtml(pv.id)}">收起</button></div>`;
       }
     } else if (pv.ok) {
