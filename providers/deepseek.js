@@ -241,7 +241,7 @@ async function fetchUsage(p, timeoutMs) {
 
   const items = [];
   // 价目（元/百万token · 峰/谷，输出价）随峰谷时段展示，来源官方定价页
-  const priceLines = MODEL_PRICES.map((mp) => `${mp.model} · 峰 ¥${mp.peak} ｜ 谷 ¥${mp.valley}`);
+  const priceLines = MODEL_PRICES.map((mp) => `${mp.model} · 峰 ${mp.peak} ｜ 谷 ${mp.valley}`);
   items.push({
     key: 'deepseek-peak-schedule',
     title: '峰谷时段 · 价目',
