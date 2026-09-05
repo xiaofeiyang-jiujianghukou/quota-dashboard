@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadConfig, providerStatus, ROOT_DIR } from './lib/config.js';
 import { collectAll } from './lib/runner.js';
-import { evaluateAlerts, alertStatus, recentAlerts } from './lib/alert.js';
+import { evaluateAlerts, evaluateQuotaReminders, alertStatus, recentAlerts } from './lib/alert.js';
 import * as wecom from './lib/wecom.js';
 import { authStatus, updateAuth } from './lib/auth.js';
 // login 模块懒加载（未安装 playwright 时自动登录降级，不影响看板）
@@ -40,6 +40,8 @@ async function refresh(force = false) {
       lastFetch = Date.now();
       // 提醒评估（内部异步发送，异常不外抛）
       evaluateAlerts(cfg, result);
+      // 额度恢复桌面提醒（恢复前 5 分钟 / 恢复后，不依赖企业微信）
+      evaluateQuotaReminders(result);
       return result;
     })
     .finally(() => {
