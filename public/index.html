@@ -74,8 +74,11 @@
   }
   .card {
     background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
-    overflow: hidden; display: flex; flex-direction: column; min-width: 0;
+    overflow: hidden; display: flex; flex-direction: column;
+    min-width: 0; width: 100%; max-width: 100%;
   }
+  /* 兜底：卡片内所有文字一律允许任意断行，杜绝长文本把内容挤出右缘 */
+  .card, .card * { box-sizing: border-box; overflow-wrap: anywhere; word-break: break-word; }
   .card-head {
     display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap;
     padding: 12px 14px; border-bottom: 1px solid var(--border);
