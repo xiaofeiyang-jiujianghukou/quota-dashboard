@@ -100,14 +100,16 @@ export async function collect(cfg) {
         continue;
       }
       const statusText = status === 1 ? '生效中' : status != null ? `状态${status}` : '';
-      const remainingPct = toNum(m.current_interval_remaining_percent);
+      const intervalRemPct = toNum(m.current_interval_remaining_percent);
       const weeklyRemainPct = toNum(m.current_weekly_remaining_percent);
       const total = toNum(m.current_interval_total_count);
       const remaining = toNum(m.current_interval_usage_count);
 
-      const item = {
-        key: `minimax-${name}`,
-        title: `Token Plan · ${name}`,
+      // 与其他平台一致：一个模型按"窗口"拆成多行展示（MiniMax 每模型有 5小时会话窗口 + 每周 两组）
+      // —— 5 小时窗口行（主额度）
+      const fiveHour = {
+        key: `minimax-${name}-5h`,
+        title: `Token Plan · ${name} · 5小时会话窗口`,
         kind: 'plan',
         planName: subPlanName,
         priceText: planPrice(cfg, 'minimax', (p.planName || subPlanName).toLowerCase()),
@@ -116,26 +118,49 @@ export async function collect(cfg) {
         resetLabel: '5 小时重置',
         expiresAt: subExpiry,
         quotaText: subQuota || planQuotaText(cfg, 'minimax', (p.planName || subPlanName).toLowerCase()),
-        extra: {
-          status: statusText,
-          weeklyRemainingPercent: weeklyRemainPct,
-          weeklyResetAt: epochToISO(m.weekly_end_time),
-          intervalStart: epochToISO(m.start_time),
-        },
+        extra: { status: statusText },
       };
-      if (remainingPct != null) {
-        item.remainingPercent = remainingPct;
-        item.percentUsed = 100 - remainingPct;
-        item.unit = 'used';
+      if (intervalRemPct != null) {
+        fiveHour.remainingPercent = intervalRemPct;
+        fiveHour.percentUsed = 100 - intervalRemPct;
+        fiveHour.unit = 'used';
       }
-      // 若某些套餐类型给绝对值则透传
       if (total != null && total > 0) {
-        item.total = total;
-        item.remaining = remaining;
-        item.used = total - remaining;
-        item.unit = '次';
+        fiveHour.total = total;
+        fiveHour.remaining = remaining;
+        fiveHour.used = total - remaining;
+        fiveHour.unit = '次';
       }
-      items.push(item);
+      items.push(fiveHour);
+
+      // —— 每周窗口行
+      if (weeklyRemainPct != null && m.weekly_end_time != null) {
+        const weekly = {
+          key: `minimax-${name}-weekly`,
+          title: `Token Plan · ${name} · 每周`,
+          kind: 'plan',
+          planName: subPlanName,
+          priceText: planPrice(cfg, 'minimax', (p.planName || subPlanName).toLowerCase()),
+          price: planPriceNum(cfg, 'minimax', (p.planName || subPlanName).toLowerCase()),
+          resetAt: epochToISO(m.weekly_end_time),
+          resetLabel: '每周重置',
+          expiresAt: subExpiry,
+          quotaText: subQuota || planQuotaText(cfg, 'minimax', (p.planName || subPlanName).toLowerCase()),
+          extra: { status: statusText },
+        };
+        weekly.remainingPercent = weeklyRemainPct;
+        weekly.percentUsed = 100 - weeklyRemainPct;
+        weekly.unit = 'used';
+        const wkTotal = toNum(m.current_weekly_total_count);
+        const wkUsed = toNum(m.current_weekly_usage_count);
+        if (wkTotal != null && wkTotal > 0) {
+          weekly.total = wkTotal;
+          weekly.used = wkUsed;
+          weekly.remaining = wkTotal - wkUsed;
+          weekly.unit = '次';
+        }
+        items.push(weekly);
+      }
     }
     // 未开通的模型合并成一行提示，避免占满卡片
     if (notInPlan.length > 0) {
