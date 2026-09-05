@@ -240,18 +240,24 @@ async function fetchUsage(p, timeoutMs) {
   for (const [t, v] of Object.entries(tokHourly)) (isPeakBucket(Number(t)) ? peak : idle).tok += v;
 
   const items = [];
-  // 价目（元/百万token · 峰/谷，输出价）随峰谷时段展示，来源官方定价页
-  const priceLines = MODEL_PRICES.map((mp) => `${mp.model} · 峰 ${mp.peak} ｜ 谷 ${mp.valley}`);
+  // 峰谷时段（单行）
   items.push({
     key: 'deepseek-peak-schedule',
-    title: '峰谷时段 · 价目',
+    title: '峰谷时段',
     kind: 'info',
-    extra: {
-      note:
-        `高峰 工作日 9:00-12:00 / 14:00-18:00 ｜ 空闲 其余时段（半价）· ${currentPeriod()}\n` +
-        `价目（输出价，元/百万token · 峰/谷，摘自官方定价页 ${PRICING_AS_OF}）：\n` +
-        priceLines.join('\n'),
-    },
+    extra: { note: `高峰 工作日 9:00-12:00 / 14:00-18:00 ｜ 空闲 其余时段（半价）· ${currentPeriod()}` },
+  });
+  // 价目（单行，峰/谷=输出价）来源官方定价页
+  const priceLine = MODEL_PRICES.map((mp) =>
+    mp.model === 'deepseek-v4-flash-vision-exp'
+      ? 'vision 同 v4-flash（图像按 token 计费）'
+      : `${mp.model.replace('deepseek-v4-', 'v4-')} 峰${mp.peak}/谷${mp.valley}`
+  ).join(' · ');
+  items.push({
+    key: 'deepseek-pricing',
+    title: '价目 · 元/百万token（峰/谷 · 输出价）',
+    kind: 'info',
+    extra: { note: `${priceLine}（摘自官方定价页 ${PRICING_AS_OF}）` },
   });
   items.push({
     key: 'deepseek-usage-today',
