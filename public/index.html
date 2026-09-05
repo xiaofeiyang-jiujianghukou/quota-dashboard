@@ -66,10 +66,11 @@
   .grid {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
     gap: 16px;
+    align-items: start;
   }
   .card {
     background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
-    overflow: hidden; display: flex; flex-direction: column;
+    overflow: hidden; display: flex; flex-direction: column; min-width: 0;
   }
   .card-head {
     display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap;
@@ -99,18 +100,19 @@
   .errbox .err-title { font-weight: 600; margin-bottom: 2px; }
   .errbox .err-detail { color: rgba(255,179,173,.75); word-break: break-all; }
 
-  .items { padding: 6px 14px 12px; display: flex; flex-direction: column; gap: 12px; }
+  .items { padding: 6px 14px 12px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
   .item:first-child { margin-top: 8px; }
+  .item { min-width: 0; }
 
-  .item-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-  .item-title { font-size: 13.5px; font-weight: 600; }
+  .item-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; min-width: 0; }
+  .item-title { font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
   .kind {
     font-size: 10.5px; padding: 1px 7px; border-radius: 6px; border: 1px solid var(--border);
     color: var(--muted); flex: none;
   }
   .item-extra-status { margin-left: auto; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
-  .plan-line { font-size: 11.5px; color: var(--blue); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .note-line { font-size: 11.5px; color: var(--amber); margin-top: 3px; }
+  .plan-line { font-size: 11.5px; color: var(--blue); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .note-line { font-size: 11.5px; color: var(--amber); margin-top: 3px; overflow-wrap: anywhere; word-break: break-word; }
 
   .bar {
     height: 8px; border-radius: 999px; background: #21262d; overflow: hidden; margin-top: 8px;
