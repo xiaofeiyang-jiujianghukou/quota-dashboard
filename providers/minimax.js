@@ -105,11 +105,12 @@ export async function collect(cfg) {
       const total = toNum(m.current_interval_total_count);
       const remaining = toNum(m.current_interval_usage_count);
 
-      // 5小时窗口是固定周期滚动：没用过（余量≈100%）时没有"恢复"概念，不展示重置倒计时、
-      // 也不触发恢复提醒；只有真的消耗过（>0.5%）才显示。weekly 同理。
+      // 官方口径：5小时会话窗口「从第一次调用开始计时」（首调起算的滚动窗口）——
+      // 未调用则没有窗口，无"重置时刻"可言，不展示倒计时、不触发恢复提醒；
+      // 一旦发生过调用（哪怕极少量），窗口即开启，此时用 API 返回的 end_time 显示窗口结束/重置时刻。
       const intervalUsed = intervalRemPct != null ? 100 - intervalRemPct : 0;
       const weeklyUsed = weeklyRemainPct != null ? 100 - weeklyRemainPct : 0;
-      const TOUCHED = 0.5; // 消耗 >0.5% 视为用过
+      const TOUCHED = 0; // 只要发生过调用（余量 <100%）即视为窗口已开启
 
       // 与其他平台一致：一个模型按"窗口"拆成多行展示（MiniMax 每模型有 5小时会话窗口 + 每周 两组）
       // —— 5 小时窗口行（主额度）
