@@ -247,18 +247,16 @@ async function fetchUsage(p, timeoutMs) {
     kind: 'info',
     extra: { note: `高峰 工作日 9:00-12:00 / 14:00-18:00 ｜ 空闲 其余时段（半价）· ${currentPeriod()}` },
   });
-  // 价目（单行，峰/谷=输出价）来源官方定价页
-  const priceLine = MODEL_PRICES.map((mp) =>
-    mp.model === 'deepseek-v4-flash-vision-exp'
-      ? 'vision 同 v4-flash（图像按 token 计费）'
-      : `${mp.model.replace('deepseek-v4-', 'v4-')} 峰${mp.peak}/谷${mp.valley}`
-  ).join(' · ');
-  items.push({
-    key: 'deepseek-pricing',
-    title: '价目 · 元/百万token（峰/谷 · 输出价）',
-    kind: 'info',
-    extra: { note: `${priceLine}（摘自官方定价页 ${PRICING_AS_OF}）` },
-  });
+  // 价目：拆成极短单行，任何窄屏都放得下（峰/谷=输出价，元/百万token）
+  for (const mp of MODEL_PRICES) {
+    const short = mp.model.replace('deepseek-v4-', 'v4-').replace('-flash-vision-exp', '-vision');
+    items.push({
+      key: `deepseek-pricing-${mp.model}`,
+      title: `价目 · ${short}`,
+      kind: 'info',
+      extra: { note: mp.note || `峰 ${mp.peak} · 谷 ${mp.valley}` },
+    });
+  }
   items.push({
     key: 'deepseek-usage-today',
     title: '今日消费',
