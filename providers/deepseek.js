@@ -11,8 +11,16 @@ export const name = 'DeepSeek';
 // 官方模型价格（来源 https://api-docs.deepseek.com/zh-cn/quick_start/pricing，随官方调价更新）
 // 单位：元 / 百万 tokens；每行「闲时/高峰」——高峰=北京时间工作日 9:00-12:00、14:00-18:00，其余闲时半价
 const MODEL_PRICES = [
-  { model: 'deepseek-v4-flash', input: '¥1.5 / ¥3', output: '¥4.5 / ¥9', cacheHitInput: '¥0.05 / ¥0.10' },
-  { model: 'deepseek-v4-pro', input: '¥4.5 / ¥9', output: '¥13.5 / ¥27', cacheHitInput: '¥0.15 / ¥0.30' },
+  {
+    model: 'deepseek-v4-flash',
+    input: '输入 ¥1.5/¥3（缓存未命中）· 缓存命中 ¥0.05/¥0.10',
+    output: '输出 ¥4.5/¥9',
+  },
+  {
+    model: 'deepseek-v4-pro',
+    input: '输入 ¥4.5/¥9（缓存未命中）· 缓存命中 ¥0.15/¥0.30',
+    output: '输出 ¥13.5/¥27',
+  },
   { model: 'deepseek-v4-flash-vision-exp', note: '与 v4-flash 同价（图像按 token 计费）' },
 ];
 const PRICING_AS_OF = '2026-09-05';
@@ -101,7 +109,7 @@ export async function collect(cfg) {
         extra: {
           note: mp.note
             ? mp.note
-            : `输入 ${mp.input}（缓存未命中）/ 缓存命中输入 ${mp.cacheHitInput} ｜ 输出 ${mp.output}`,
+            : `${mp.input}\n${mp.output}`,
         },
       });
     }
