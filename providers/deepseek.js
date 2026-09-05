@@ -9,19 +9,11 @@ export const id = 'deepseek';
 export const name = 'DeepSeek';
 
 // 官方模型价格（来源 https://api-docs.deepseek.com/zh-cn/quick_start/pricing，随官方调价更新）
-// 单位：元 / 百万 tokens；每行「闲时/高峰」——高峰=北京时间工作日 9:00-12:00、14:00-18:00，其余闲时半价
+// 按用户偏好只保留「峰价 / 谷价」：取输出价（元/百万token）。峰=北京时间工作日 9-12/14-18，谷=其余（半价）。
 const MODEL_PRICES = [
-  {
-    model: 'deepseek-v4-flash',
-    input: '输入 ¥1.5/¥3（缓存未命中）· 缓存命中 ¥0.05/¥0.10',
-    output: '输出 ¥4.5/¥9',
-  },
-  {
-    model: 'deepseek-v4-pro',
-    input: '输入 ¥4.5/¥9（缓存未命中）· 缓存命中 ¥0.15/¥0.30',
-    output: '输出 ¥13.5/¥27',
-  },
-  { model: 'deepseek-v4-flash-vision-exp', note: '与 v4-flash 同价（图像按 token 计费）' },
+  { model: 'deepseek-v4-flash', peak: '¥9', valley: '¥4.5' },
+  { model: 'deepseek-v4-pro', peak: '¥27', valley: '¥13.5' },
+  { model: 'deepseek-v4-flash-vision-exp', peak: '¥9', valley: '¥4.5' },
 ];
 const PRICING_AS_OF = '2026-09-05';
 
@@ -248,10 +240,8 @@ async function fetchUsage(p, timeoutMs) {
   for (const [t, v] of Object.entries(tokHourly)) (isPeakBucket(Number(t)) ? peak : idle).tok += v;
 
   const items = [];
-  // 官方价目（元/百万token · 闲时/高峰）：与峰谷时段同处展示，来源官方定价页
-  const priceLines = MODEL_PRICES.map((mp) =>
-    mp.note ? `${mp.model} · ${mp.note}` : `${mp.model} · ${mp.input}；${mp.output}`
-  );
+  // 价目（元/百万token · 峰/谷，输出价）随峰谷时段展示，来源官方定价页
+  const priceLines = MODEL_PRICES.map((mp) => `${mp.model} · 峰 ¥${mp.peak} ｜ 谷 ¥${mp.valley}`);
   items.push({
     key: 'deepseek-peak-schedule',
     title: '峰谷时段 · 价目',
@@ -259,7 +249,7 @@ async function fetchUsage(p, timeoutMs) {
     extra: {
       note:
         `高峰 工作日 9:00-12:00 / 14:00-18:00 ｜ 空闲 其余时段（半价）· ${currentPeriod()}\n` +
-        `价目(元/百万token · 闲/峰)（摘自官方定价页 ${PRICING_AS_OF}）：\n` +
+        `价目（输出价，元/百万token · 峰/谷，摘自官方定价页 ${PRICING_AS_OF}）：\n` +
         priceLines.join('\n'),
     },
   });
