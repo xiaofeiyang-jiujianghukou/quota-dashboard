@@ -94,25 +94,6 @@ export async function collect(cfg) {
         });
       }
     }
-    // 官方模型价格（静态条目，随 MODEL_PRICES 更新；便于免去官网查询）
-    items.push({
-      key: 'deepseek-pricing-header',
-      title: '模型价格 · 元/百万token',
-      kind: 'info',
-      extra: { note: `格式：闲时/高峰（高峰=工作日 9-12/14-18 北京时间，闲时半价）· 摘自官方定价页 ${PRICING_AS_OF}` },
-    });
-    for (const mp of MODEL_PRICES) {
-      items.push({
-        key: `deepseek-pricing-${mp.model}`,
-        title: mp.model,
-        kind: 'info',
-        extra: {
-          note: mp.note
-            ? mp.note
-            : `${mp.input}\n${mp.output}`,
-        },
-      });
-    }
     return { ok: true, items };
   } catch (e) {
     return { ok: false, items: [], error: e.message, detail: 'https://api.deepseek.com/user/balance' };
@@ -267,11 +248,20 @@ async function fetchUsage(p, timeoutMs) {
   for (const [t, v] of Object.entries(tokHourly)) (isPeakBucket(Number(t)) ? peak : idle).tok += v;
 
   const items = [];
+  // 官方价目（元/百万token · 闲时/高峰）：与峰谷时段同处展示，来源官方定价页
+  const priceLines = MODEL_PRICES.map((mp) =>
+    mp.note ? `${mp.model} · ${mp.note}` : `${mp.model} · ${mp.input}；${mp.output}`
+  );
   items.push({
     key: 'deepseek-peak-schedule',
-    title: '峰谷时段',
+    title: '峰谷时段 · 价目',
     kind: 'info',
-    extra: { note: `高峰 工作日 9:00-12:00 / 14:00-18:00 ｜ 空闲 其余时段（半价）· ${currentPeriod()}` },
+    extra: {
+      note:
+        `高峰 工作日 9:00-12:00 / 14:00-18:00 ｜ 空闲 其余时段（半价）· ${currentPeriod()}\n` +
+        `价目(元/百万token · 闲/峰)（摘自官方定价页 ${PRICING_AS_OF}）：\n` +
+        priceLines.join('\n'),
+    },
   });
   items.push({
     key: 'deepseek-usage-today',
