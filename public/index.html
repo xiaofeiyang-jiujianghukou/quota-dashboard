@@ -2,6 +2,8 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>AI 套餐余量看板</title>
 <style>
@@ -994,7 +996,7 @@ document.addEventListener('click', async (e) => {
 setInterval(tick, 1000);
 
 (async function init() {
-  $('footer').innerHTML = `密钥配置：<code>quota-dashboard/config.json</code>（仅本机 127.0.0.1 可访问，密钥不会回传到页面） · 六家平台均为<b>纯 HTTP + 密钥</b>查询，无需安装任何 AI 平台客户端 · 微信提醒经 <code>wecom-cli</code>（企业微信机器人）`;
+  $('footer').innerHTML = `密钥配置：<code>quota-dashboard/config.json</code>（仅本机 127.0.0.1 可访问，密钥不会回传到页面） · 六家平台均为<b>纯 HTTP + 密钥</b>查询，无需安装任何 AI 平台客户端 · 微信提醒经 <code>wecom-cli</code>（企业微信机器人） · <span style="opacity:.6">UI fbd25a1</span>`;
   await fetchStatus();
   await refreshAuthInfo();
   render();

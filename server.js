@@ -50,9 +50,15 @@ async function refresh(force = false) {
   return inflight;
 }
 
+const NO_CACHE = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate',
+  Pragma: 'no-cache',
+  Expires: '0',
+};
+
 function sendJson(res, code, obj) {
   const body = JSON.stringify(obj);
-  res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', ...NO_CACHE });
   res.end(body);
 }
 
@@ -71,7 +77,7 @@ function serveStatic(res, pathname) {
       res.end('Not Found');
       return;
     }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(full)] || 'application/octet-stream' });
+    res.writeHead(200, { 'Content-Type': MIME[path.extname(full)] || 'application/octet-stream', ...NO_CACHE });
     res.end(data);
   });
 }
