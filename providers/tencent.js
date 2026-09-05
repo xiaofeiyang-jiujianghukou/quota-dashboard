@@ -44,11 +44,12 @@ const TEN_CENT_PLAN_NAMES = {
   tp_max: '通用 Token Plan · 个人版 Max（专业套餐）',
 };
 
-// 2026-08-31 起，Token Plan 个人版改用"积分"为单位（数值口径未变：原 3500万 token = 现 3500万 积分）
-// 不同档位×不同模型族有差异化"抵扣系数"：单次请求积分 = (token数 × 系数) / 1,000,000
-//   积分 → 实际可用 token ≈ 积分 × 1,000,000 / 系数（系数越小越划算）
-// 系数来源：https://cloud.tencent.com/document/product/1823/133811
-// 仅覆盖当前可用档位；新增档位后更新这里即可。
+// 2026-08-31 17:00 起，Token Plan 个人版改用"积分"为单位（数值口径未变：原 3500万 token = 现 3500万 积分）。
+// 抵扣规则：单次请求积分 = (未缓存输入token×系数 + 输出token×系数 + 缓存命中token×系数) / 1,000,000，
+//   且不同模型族/档位系数不同（官方文档会持续更新）。因此"积分 ↔ 可用 token"不能简单换算，
+//   本看板按腾讯云控制台同口径展示积分余量（CycleCapacity/CycleRemain 即积分），换算以控制台/官方文档为准。
+// 参考系数（文档 2026-08-31，仅展示不换算）：通用档 Auto 等存量模型 Lite 22.285 / Std 19.8 / Pro 18.687 / Max 18.43；
+//   Hy 档 Hy3: 16 / 15.6 / 14.875 / 14.4
 const POINTS_FACTORS = {
   universal: { tp_lite: 22.285, tp_standard: 19.8, tp_pro: 18.687, tp_max: 18.43 },
   hy: { tp_lite: 16, tp_standard: 15.6, tp_pro: 14.875, tp_max: 14.4 },
@@ -149,19 +150,16 @@ export async function collect(cfg) {
     const daily = (res && res.DailyUsageList) || [];
     const today = daily.length > 0 ? daily[daily.length - 1] : null;
 
-    // 积分制：CycleCapacity/CycleRemain/CycleTotalUsage 单位均为积分
-    // 实际可用 token ≈ 积分 × 1,000,000 / 抵扣系数（按套餐家族 × 档位）
+    // 积分制：CycleCapacity/CycleRemain/CycleTotalUsage 单位均为积分（与控制台同口径）
     const family = detectPlanFamily(plan);
     const factor = (POINTS_FACTORS[family] || POINTS_FACTORS.universal)[plan.Plan] || null;
-    const estimatedTotalTokens = total != null && factor ? Math.round((total * 1e6) / factor) : null;
-    const estimatedRemainTokens = remaining != null && factor ? Math.round((remaining * 1e6) / factor) : null;
 
     const extra = {
       quotaStatus: quotaStatusText(plan.QuotaStatus),
       status: quotaStatusText(plan.QuotaStatus) || null,
       remainCycles: res ? res.RemainCycles : null,
       startTime: plan.StartTime || null,
-      // 当前计费周期用量明细（输入/输出/缓存 token 对应积分消耗）
+      // 当前计费周期用量明细（单位：积分）
       cycleUsage: {
         total: used,
         input: toNum(res && res.CycleInputUsage),
@@ -171,13 +169,10 @@ export async function collect(cfg) {
       todayUsage: today
         ? { date: today.Date, total: toNum(today.TotalUsage), input: toNum(today.InputUsage), output: toNum(today.OutputUsage) }
         : null,
-      // 2026-08-31 起改为积分制
+      // 2026-08-31 起改为积分制（抵扣系数随模型族/档位变化，此处仅记录，不换算成 token）
       unitLabel: '积分',
       pointsFamily: family === 'hy' ? 'Hy Token Plan' : '通用 Token Plan',
-      pointsFactor: factor,                       // 抵扣系数（数字越小越划算）
-      tokensPerPoint: factor ? Math.round((1e6 / factor) * 100) / 100 : null, // 1 积分 ≈ X token
-      estimatedTotalTokens,                        // 按主流模型系数估算的实际可用 token（仅供参考）
-      estimatedRemainTokens,
+      pointsFactor: factor,
     };
 
     items.push({
@@ -187,10 +182,7 @@ export async function collect(cfg) {
       planName: null, // 标题已含完整套餐名，避免重复展示；金额单列
       priceText: planPrice(cfg, 'tencent', plan.Plan),
       price: planPriceNum(cfg, 'tencent', plan.Plan),
-      quotaText:
-        total != null
-          ? `周期 ${fmtBig(total)} 积分` + (estimatedTotalTokens != null ? `（≈ ${fmtBig(estimatedTotalTokens)} token）` : '')
-          : planQuotaText(cfg, 'tencent', plan.Plan),
+      quotaText: total != null ? `周期 ${fmtBig(total)} 积分` : planQuotaText(cfg, 'tencent', plan.Plan),
       total,
       used,
       remaining,
