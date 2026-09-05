@@ -240,12 +240,18 @@ async function fetchUsage(p, timeoutMs) {
   for (const [t, v] of Object.entries(tokHourly)) (isPeakBucket(Number(t)) ? peak : idle).tok += v;
 
   const items = [];
-  // 峰谷时段（单行）
+  // 峰谷时段：拆成两条短单行，避免窄屏尾部被裁
   items.push({
     key: 'deepseek-peak-schedule',
     title: '峰谷时段',
     kind: 'info',
-    extra: { note: `高峰 工作日 9:00-12:00 / 14:00-18:00 ｜ 空闲 其余时段（半价）· ${currentPeriod()}` },
+    extra: { note: '高峰 工作日 9:00-12:00 / 14:00-18:00 ｜ 空闲 其余时段（半价）' },
+  });
+  items.push({
+    key: 'deepseek-current-period',
+    title: '当前时段',
+    kind: 'info',
+    extra: { note: currentPeriod() },
   });
   // 价目：拆成极短单行，任何窄屏都放得下（峰/谷=输出价，元/百万token）
   for (const mp of MODEL_PRICES) {
