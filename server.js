@@ -87,6 +87,14 @@ const server = http.createServer(async (req, res) => {
   const { pathname } = url;
 
   try {
+    // 版本化入口：访问 / 时 302 到 /?v=<index.html 修改时间>，URL 变化强制浏览器拉新 HTML，杜绝缓存旧页
+    if (req.method === 'GET' && pathname === '/' && !url.searchParams.has('v')) {
+      const indexHtml = path.join(PUBLIC_DIR, 'index.html');
+      const stamp = fs.existsSync(indexHtml) ? Math.floor(fs.statSync(indexHtml).mtimeMs) : Date.now();
+      res.writeHead(302, { Location: `/?v=${stamp}` });
+      res.end();
+      return;
+    }
     if (req.method === 'GET' && pathname === '/api/quota') {
       const force = url.searchParams.get('force') === '1';
       const data = await refresh(force);
