@@ -105,6 +105,12 @@ export async function collect(cfg) {
       const total = toNum(m.current_interval_total_count);
       const remaining = toNum(m.current_interval_usage_count);
 
+      // 5小时窗口是固定周期滚动：没用过（余量≈100%）时没有"恢复"概念，不展示重置倒计时、
+      // 也不触发恢复提醒；只有真的消耗过（>0.5%）才显示。weekly 同理。
+      const intervalUsed = intervalRemPct != null ? 100 - intervalRemPct : 0;
+      const weeklyUsed = weeklyRemainPct != null ? 100 - weeklyRemainPct : 0;
+      const TOUCHED = 0.5; // 消耗 >0.5% 视为用过
+
       // 与其他平台一致：一个模型按"窗口"拆成多行展示（MiniMax 每模型有 5小时会话窗口 + 每周 两组）
       // —— 5 小时窗口行（主额度）
       const fiveHour = {
@@ -114,12 +120,14 @@ export async function collect(cfg) {
         planName: subPlanName,
         priceText: planPrice(cfg, 'minimax', (p.planName || subPlanName).toLowerCase()),
         price: planPriceNum(cfg, 'minimax', (p.planName || subPlanName).toLowerCase()),
-        resetAt: epochToISO(m.end_time),
-        resetLabel: '5 小时重置',
         expiresAt: subExpiry,
         quotaText: subQuota || planQuotaText(cfg, 'minimax', (p.planName || subPlanName).toLowerCase()),
         extra: { status: statusText },
       };
+      if (intervalUsed > TOUCHED) {
+        fiveHour.resetAt = epochToISO(m.end_time);
+        fiveHour.resetLabel = '5 小时重置';
+      }
       if (intervalRemPct != null) {
         fiveHour.remainingPercent = intervalRemPct;
         fiveHour.percentUsed = 100 - intervalRemPct;
@@ -142,12 +150,14 @@ export async function collect(cfg) {
           planName: subPlanName,
           priceText: planPrice(cfg, 'minimax', (p.planName || subPlanName).toLowerCase()),
           price: planPriceNum(cfg, 'minimax', (p.planName || subPlanName).toLowerCase()),
-          resetAt: epochToISO(m.weekly_end_time),
-          resetLabel: '每周重置',
           expiresAt: subExpiry,
           quotaText: subQuota || planQuotaText(cfg, 'minimax', (p.planName || subPlanName).toLowerCase()),
           extra: { status: statusText },
         };
+        if (weeklyUsed > TOUCHED) {
+          weekly.resetAt = epochToISO(m.weekly_end_time);
+          weekly.resetLabel = '每周重置';
+        }
         weekly.remainingPercent = weeklyRemainPct;
         weekly.percentUsed = 100 - weeklyRemainPct;
         weekly.unit = 'used';
