@@ -443,7 +443,7 @@ function renderItem(item, accent) {
       <span class="kind">${escapeHtml(kindLabel(item.kind))}</span>
       ${extraStatus ? `<span class="item-extra-status">${escapeHtml(extraStatus)}</span>` : ''}
     </div>
-    ${extraNote ? `<div class="note-line">${escapeHtml(extraNote)}</div>` : ''}
+    ${extraNote ? escapeHtml(extraNote).split('\n').map((l) => `<div class="note-line">${l}</div>`).join('') : ''}
     ${barHtml}
     <div class="item-stats">${statsHtml || '<span>额度信息以平台为准</span>'}</div>
     ${chips ? `<div class="chips">${chips}</div>` : ''}
