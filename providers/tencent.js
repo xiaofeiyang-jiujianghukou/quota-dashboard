@@ -77,6 +77,16 @@ function fmtBig(n) {
   return String(n);
 }
 
+/** 积分友好格式化（多为小数）：780 → "780"；779.9974 → "779.997"；0.002585 → "0.0026" */
+function fmtCredit(n) {
+  if (n == null) return '';
+  const v = Number(n);
+  if (Number.isInteger(v)) return String(v);
+  if (v >= 100) return v.toFixed(3).replace(/\.?0+$/, '');
+  if (v >= 1) return v.toFixed(4).replace(/\.?0+$/, '');
+  return v.toFixed(6).replace(/\.?0+$/, '');
+}
+
 /** "2026-09-21 09:22:59"（北京时区无后缀）或 RFC3339 → ISO */
 function bjToISO(s) {
   if (!s) return null;
@@ -150,7 +160,22 @@ export async function collect(cfg) {
     const daily = (res && res.DailyUsageList) || [];
     const today = daily.length > 0 ? daily[daily.length - 1] : null;
 
-    // 积分制：CycleCapacity/CycleRemain/CycleTotalUsage 单位均为积分（与控制台同口径）
+    // 积分制（2026-08-31 起）：真正的"积分"口径是 CycleCapacityCredits/CycleRemainCredits/
+    // CycleTotalUsageCredits（例：通用 Lite = 780 积分，即 3500万 token × Auto 系数 22.285 / 100万）。
+    // 旧的 CycleCapacity/CycleRemain 等仍是"token 名义额度"（3500万），控制台改积分后以 Credits 为准。
+    const hasCredits = res && res.CycleCapacityCredits != null;
+    const totalQ = hasCredits ? toNum(res.CycleCapacityCredits) : total;
+    const remainQ = hasCredits ? toNum(res.CycleRemainCredits) : remaining;
+    const usedQ = hasCredits ? toNum(res.CycleTotalUsageCredits) : used;
+    const cycleCredits = hasCredits
+      ? {
+          total: usedQ,
+          input: toNum(res.CycleInputUsageCredits),
+          output: toNum(res.CycleOutputUsageCredits),
+          cache: toNum(res.CycleCacheUsageCredits),
+        }
+      : null;
+
     const family = detectPlanFamily(plan);
     const factor = (POINTS_FACTORS[family] || POINTS_FACTORS.universal)[plan.Plan] || null;
 
@@ -159,17 +184,14 @@ export async function collect(cfg) {
       status: quotaStatusText(plan.QuotaStatus) || null,
       remainCycles: res ? res.RemainCycles : null,
       startTime: plan.StartTime || null,
-      // 当前计费周期用量明细（单位：积分）
-      cycleUsage: {
-        total: used,
-        input: toNum(res && res.CycleInputUsage),
-        output: toNum(res && res.CycleOutputUsage),
-        cache: toNum(res && res.CycleCacheUsage),
-      },
+      // 积分口径用量明细（Credits 字段，2026-08-31 积分制）
+      cycleUsageCredits: cycleCredits,
+      // 旧"token 名义额度"仅留档参考（控制台显示积分后不再用于主展示）
+      tokenLegacy: { total, remaining, used },
       todayUsage: today
-        ? { date: today.Date, total: toNum(today.TotalUsage), input: toNum(today.InputUsage), output: toNum(today.OutputUsage) }
+        ? { date: today.Date, total: toNum(today.TotalUsage), credits: toNum(today.TotalUsageCredits) }
         : null,
-      // 2026-08-31 起改为积分制（抵扣系数随模型族/档位变化，此处仅记录，不换算成 token）
+      // 抵扣系数随模型族/档位变化（通用 Lite Auto=22.285），此处仅记录
       unitLabel: '积分',
       pointsFamily: family === 'hy' ? 'Hy Token Plan' : '通用 Token Plan',
       pointsFactor: factor,
@@ -182,11 +204,15 @@ export async function collect(cfg) {
       planName: null, // 标题已含完整套餐名，避免重复展示；金额单列
       priceText: planPrice(cfg, 'tencent', plan.Plan),
       price: planPriceNum(cfg, 'tencent', plan.Plan),
-      quotaText: total != null ? `周期 ${fmtBig(total)} 积分` : planQuotaText(cfg, 'tencent', plan.Plan),
-      total,
-      used,
-      remaining,
-      percentUsed: total ? (used / total) * 100 : null,
+      quotaText:
+        totalQ != null
+          ? `周期 ${fmtCredit(totalQ)} 积分` +
+            (hasCredits && remainQ != null && remainQ !== totalQ ? ` · 剩 ${fmtCredit(remainQ)}` : '')
+          : planQuotaText(cfg, 'tencent', plan.Plan),
+      total: totalQ,
+      used: usedQ,
+      remaining: remainQ,
+      percentUsed: totalQ ? (usedQ / totalQ) * 100 : null,
       unit: '积分',
       expiresAt: bjToISO(plan.ExpireTime),
       extra,
