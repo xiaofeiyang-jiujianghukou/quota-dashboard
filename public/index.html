@@ -603,9 +603,12 @@ function tick() {
     const isExpire = kind === 'expire';
     const lbl = label || (isExpire ? '到期' : '刷新/重置');
     const days = (new Date(iso).getTime() - Date.now()) / 86400000;
-    const cd = r.expired ? '已到期' : `还有 ${r.text}`;
+    // 「重置」类（5小时/每周窗口恢复时刻）时间过了 ≠ 到期：只是本轮窗口已重置、等下次刷新显示新恢复时刻
+    const cd = r.expired ? (isExpire ? '已到期' : '已重置') : `还有 ${r.text}`;
     el.innerHTML = `${lbl}: <b>${isoShort(iso)}</b>（${cd}）`;
-    el.className = 'chip2' + (r.expired ? ' expired' : isExpire && days <= 7 ? ' soon' : '');
+    el.className =
+      'chip2' +
+      (r.expired ? (isExpire ? ' expired' : '') : isExpire && days <= 7 ? ' soon' : '');
   });
 
   // 下次自动刷新倒计时
@@ -815,7 +818,7 @@ $('wecomBtn').addEventListener('click', async () => {
 });
 
 // ---- 供应商鉴权（卡片 🔐 → 只打开该供应商自己的鉴权面板）----
-const COOKIE_LOGIN_PROVIDERS = ['ark', 'zhipu', 'minimax'];
+const COOKIE_LOGIN_PROVIDERS = ['ark', 'zhipu', 'minimax', 'deepseek'];
 let authCtx = { provider: null };
 
 // 去官网：新标签页打开官方页面（cookie 平台=授权页；密钥平台=获取密钥页）
@@ -867,9 +870,11 @@ async function renderAuth(pid) {
   $('authGoRow').classList.remove('hidden');
   $('authGoBtn').textContent = cookieCapable ? '去官网授权' : '去官网获取密钥';
   $('authSyncBtn').classList.toggle('hidden', !cookieCapable);
-  $('authTip').innerHTML = cookieCapable
-    ? '登录官网后点「我已授权 · 保存会话」会连接<b>本机正在运行的 Chrome</b>读取会话。首次需用 <code>--remote-debugging-port=9222</code> 重启一次 Chrome（点保存会话失败时会提示命令）；也可手动粘贴下面字段。'
-    : '该平台用🔑密钥鉴权：点「去官网获取密钥」到控制台拿 AK/SK 或 API Key，粘贴到下面保存即可（无需浏览器 Cookie）。';
+  $('authTip').innerHTML = pid === 'deepseek'
+    ? '先<b>打开并登录 platform.deepseek.com</b>（标签页保持开启）→ 回来点「我已授权 · 保存会话」：扩展会读取 Cookie + 页面 localStorage 里的会话令牌。未装扩展时也可手动粘贴下面字段（会话令牌过期后需重新同步）。'
+    : cookieCapable
+      ? '登录官网后点「我已授权 · 保存会话」会连接<b>本机正在运行的 Chrome</b>读取会话。首次需用 <code>--remote-debugging-port=9222</code> 重启一次 Chrome（点保存会话失败时会提示命令）；也可手动粘贴下面字段。'
+      : '该平台用🔑密钥鉴权：点「去官网获取密钥」到控制台拿 AK/SK 或 API Key，粘贴到下面保存即可（无需浏览器 Cookie）。';
   const list = $('authList');
   const rows = pv.fields.map((f) => `
     <div class="auth-field">
@@ -905,22 +910,26 @@ $('authSyncBtn').addEventListener('click', async () => {
   // 1) 若装了「会话同步」扩展，直接调扩展同步（最可靠，绕开 Chrome 加密/调试端口限制）
   if (window.__quotaSyncExt) {
     $('authMsg').textContent = '正在通过浏览器扩展同步会话…';
-    const ok = await new Promise((resolve) => {
-      const t = setTimeout(() => resolve(false), 8000);
+    const res = await new Promise((resolve) => {
+      const t = setTimeout(() => resolve(null), 8000);
       window.addEventListener('message', function h(e) {
         if (e.data && e.data.type === 'quota-sync-done') {
           clearTimeout(t);
           window.removeEventListener('message', h);
-          resolve(!!e.data.ok);
+          resolve(e.data);
         }
       });
       window.postMessage({ type: 'quota-sync' }, '*');
     });
-    if (ok) {
-      $('authMsg').innerHTML = '✅ 已通过扩展同步会话！正在刷新…';
-      await renderAuth(authCtx.provider);
-      fetchQuota(true);
-      setTimeout(() => $('authModal').classList.add('hidden'), 1500);
+    if (res && res.ok) {
+      if (authCtx.provider === 'deepseek' && res.deepseek === 'no-session') {
+        $('authMsg').innerHTML = '⚠️ DeepSeek 会话读取失败：请先在新标签页<b>打开并登录 platform.deepseek.com</b>（保持开启），再点一次「我已授权 · 保存会话」';
+      } else {
+        $('authMsg').innerHTML = '✅ 已通过扩展同步会话！正在刷新…';
+        await renderAuth(authCtx.provider);
+        fetchQuota(true);
+        setTimeout(() => $('authModal').classList.add('hidden'), 1500);
+      }
     } else {
       $('authMsg').innerHTML = '❌ 扩展同步未完成。请确认扩展已配置云端地址，或点扩展图标 →「立即同步」';
     }
