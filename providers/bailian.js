@@ -157,7 +157,10 @@ async function collectHttp(cfg, p) {
     /* 订阅接口失败则跳过 */
   }
 
-  const pct = toNum(usage.per1WeekPercentage ?? usage.per1WeekPercent);
+  // ⚠ per1WeekPercentage 是 0~1 小数（0.32045964 = 已用 32.05%），须 ×100 转为百分比制，
+  //   否则看板会把它当 0.32% 用（剩余恒显示 ~100%，用量变化看不到）
+  const pctFrac = toNum(usage.per1WeekPercentage ?? usage.per1WeekPercent);
+  const pct = pctFrac != null ? pctFrac * 100 : null;
   if (pct == null) {
     return { ok: false, items: [], error: 'Token Plan 接口未返回周用量', detail: JSON.stringify(usage).slice(0, 300) };
   }
