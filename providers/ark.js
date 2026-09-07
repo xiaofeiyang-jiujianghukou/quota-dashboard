@@ -92,8 +92,9 @@ async function collectHttp(cfg, p) {
       session = null; // 会话失效则回退
     }
   }
-  const tier = (session && session.tier) || meta.planTier || '';
-  const expiryMs = (session && session.endTimeMs) || meta.expiresAt;
+  // 档位优先级：会话(ListSubscribeTrade，近期对部分账号返回空) > 配置显式 planTier > 本机 meta 兜底
+  const tier = (session && session.tier) || p.planTier || meta.planTier || '';
+  const expiryMs = (session && session.endTimeMs) || meta.expiresAt || p.expiresAt || null;
   const items = [];
   let statusNote = '';
 
