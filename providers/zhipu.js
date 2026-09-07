@@ -155,6 +155,13 @@ export async function collect(cfg) {
         if (totalsByUnit[3]) quotaParts.push(`5h ${totalsByUnit[3]}`);
         if (totalsByUnit[6]) quotaParts.push(`周 ${totalsByUnit[6]}`);
         const planQuota = quotaParts.length > 0 ? quotaParts.join(' · ') : '';
+        // 周额度（unit 6）是硬上限：用尽后 5 小时窗口即使有剩余也不可用，需在 5h 行体现
+        const weeklyLimit = limits.find(
+          (l) => (l.type === 'CREDIT_LIMIT' || l.type === 'TOKENS_LIMIT') && l.unit === 6
+        );
+        const weeklyRem = weeklyLimit ? toNum(weeklyLimit.remaining) : null;
+        const weeklyPct = weeklyLimit ? toNum(weeklyLimit.percentage) : null;
+        const weeklyExhausted = (weeklyRem != null && weeklyRem <= 0) || (weeklyPct != null && weeklyPct >= 100);
         for (const limit of limits) {
           // 实测 type 为 CREDIT_LIMIT；兼容历史 TOKENS_LIMIT
           if ((limit.type === 'CREDIT_LIMIT' || limit.type === 'TOKENS_LIMIT') && (limit.unit === 3 || limit.unit === 6)) {
@@ -179,6 +186,11 @@ export async function collect(cfg) {
               item.total = _total;
               item.remaining = _rem != null ? _rem : _total;
               item.used = _total - (item.remaining || 0);
+            }
+            // 周额度（unit 6）用尽后，5 小时窗口即使有余量也不可用：照常显示用量，但标红提醒
+            if (limit.unit === 3 && weeklyExhausted) {
+              item.extra.alert = true;
+              item.extra.note = '周额度已用尽 · 5 小时窗口暂不可用';
             }
             // 5 小时滚动窗口未开始使用时，接口不返回重置时间 → 给出友好提示
             // （usage/remaining 绝对值语义含糊且与 percentage 矛盾，不展示，只以百分比为准）
