@@ -147,8 +147,17 @@ async function collectHttp(cfg, p) {
     product === 'agent-plan'
       ? 'Agent Plan'
       : `Coding Plan${tier ? ' ' + tier.toUpperCase() : ''}`;
-  const priceText = planPrice(cfg, 'ark', tier);
-  const price = planPriceNum(cfg, 'ark', tier);
+  // 价格优先用官方实时报价（EstimateSubscribePrice，需会话 cookie）；失败才回退内置表
+  let livePrice = null;
+  if (tier && p.sessionCookie) {
+    try {
+      livePrice = await estimateSubscribePrice(p, timeoutMs, tier);
+    } catch {
+      livePrice = null;
+    }
+  }
+  const priceText = livePrice != null ? `¥${livePrice}/月（官方实时价）` : planPrice(cfg, 'ark', tier);
+  const price = livePrice != null ? livePrice : planPriceNum(cfg, 'ark', tier);
   for (const q of quotas) {
     const level = String(q.Level || '').toLowerCase();
     const periodLabel = PERIOD_LABELS[level] || q.Level || '';
@@ -201,6 +210,49 @@ function readArkMeta() {
     /* ignore */
   }
   return out;
+}
+
+/**
+ * 官方实时报价（EstimateSubscribePrice）：POST console…/EstimateSubscribePrice
+ * body: {ResourceType:"CodingPlan",ResourceName:"",BizInfo:<tier>,Quantity:1,Period:"monthly",Times:1}
+ * 返回 Result.Price.Price（¥/月）。价格以官方为准，不依赖本地价格表。失败抛错（调用方回退）。
+ */
+async function estimateSubscribePrice(p, timeoutMs, tier) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs || 15000);
+  try {
+    const region = p.region || 'cn-beijing';
+    const url = `https://console.volcengine.com/api/top/ark/${region}/2024-01-01/EstimateSubscribePrice?`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json, text/plain, */*',
+        'content-type': 'application/json',
+        cookie: p.sessionCookie,
+        origin: 'https://console.volcengine.com',
+        referer: `https://console.volcengine.com/ark/region:${region}/subscription/coding-plan?tab=usage`,
+        'x-csrf-token': p.csrfToken || '',
+        'x-web-id': p.webId || '',
+      },
+      body: JSON.stringify({
+        ResourceType: 'CodingPlan',
+        ResourceName: '',
+        BizInfo: tier,
+        Quantity: 1,
+        Period: 'monthly',
+        Times: 1,
+      }),
+      signal: controller.signal,
+    });
+    const json = await res.json();
+    const err = json.ResponseMetadata && json.ResponseMetadata.Error;
+    if (err) throw new Error(`[${err.Code}] ${err.Message || ''}`);
+    const price = json.Result && json.Result.Price && json.Result.Price.Price;
+    if (price == null) throw new Error('EstimateSubscribePrice 无 Price 字段');
+    return Number(price);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
