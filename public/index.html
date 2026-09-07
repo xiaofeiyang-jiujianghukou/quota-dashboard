@@ -120,7 +120,7 @@
   .item-extra-status { margin-left: auto; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
   .plan-line { font-size: 11.5px; color: var(--blue); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
   .note-line { font-size: 11.5px; color: var(--amber); margin-top: 3px; max-width: 100%; overflow-wrap: anywhere; word-break: break-word; white-space: pre-line; }
-  .note-line.alert { color: var(--red); }
+  .note-line.alert { color: var(--muted); } /* 灰色 = 该窗口当前不可用 */
 
   .bar {
     height: 8px; border-radius: 999px; background: #21262d; overflow: hidden; margin-top: 8px;
@@ -130,6 +130,7 @@
   .bar.c-amber > div { background: var(--amber); }
   .bar.c-red > div { background: var(--red); }
   .bar.c-blue > div { background: var(--blue); }
+  .bar.c-gray > div { background: var(--muted); }
 
   .item-stats {
     display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px;
@@ -391,11 +392,12 @@ function renderItem(item, accent) {
           : null;
   const barW = remPct != null ? remPct : 0;
   const alert = !!(item.extra && item.extra.alert);
-  const barColorPct = alert ? 0 : remPct; // 异常(周额度用尽等)时进度条转红提示
+  // 异常（周额度用尽等）：用量照常展示，但进度条与说明置灰 = 当前不可用
+  const barClassStr = alert ? 'c-gray' : barClass(remPct);
   // 余额/无比例数据不画进度条
   const barHtml =
     remPct != null || item.percentUsed != null
-      ? `<div class="bar ${barClass(barColorPct)}"><div style="width:${Math.min(100, Math.max(0, barW))}%"></div></div>`
+      ? `<div class="bar ${barClassStr}"><div style="width:${Math.min(100, Math.max(0, barW))}%"></div></div>`
       : '';
   const el = document.createElement('div');
   el.className = 'item';
