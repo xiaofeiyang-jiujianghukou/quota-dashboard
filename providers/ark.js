@@ -24,14 +24,6 @@ const PERIOD_LABELS = {
   daily: '每日',
 };
 
-// Coding Plan 各档位窗口额度（次/窗口，官方活动/购买页 2026-07 口径；有模型倍率消耗，按次近似）
-//   Lite: 1,200 次/5小时 · 9,000 次/周 · 18,000 次/月
-//   Pro:  6,000 次/5小时 · 45,000 次/周 · 90,000 次/月
-const CODING_PLAN_WINDOWS = {
-  lite: { session: 1200, weekly: 9000, monthly: 18000, '5h': 1200, five_hour: 1200 },
-  pro: { session: 6000, weekly: 45000, monthly: 90000, '5h': 6000, five_hour: 6000 },
-};
-
 const VOLC_API = 'https://open.volcengineapi.com/';
 const VOLC_VERSION = '2024-01-01';
 const VOLC_SERVICE = 'ark';
@@ -184,22 +176,7 @@ async function collectHttp(cfg, p) {
       extra: {},
     };
     if (expiryMs) item.expiresAt = new Date(expiryMs).toISOString();
-    // Coding Plan 窗口额度按档位官方规格换算剩余（次/窗口）。
-    // ⚠ 方舟名义按"次"，实际按 token 折算+模型倍率扣减（usage≈max(round(tokens/token_limit),1)，各模型 2~6x）。
-    //   故"次"为折算额度单位（≈积分），非可发起请求数；规格为 2026-07 官网口径，仅供参考。
-    if (product === 'coding-plan') {
-      const spec = CODING_PLAN_WINDOWS[tier];
-      const specTotal = spec && spec[level];
-      if (specTotal) {
-        const usedPct = toNum(q.Percent);
-        const remainAbs = Math.round((specTotal * (100 - usedPct)) / 100);
-        item.total = specTotal;
-        item.used = specTotal - remainAbs;
-        item.remaining = remainAbs;
-        item.unit = '次';
-        item.extra.note = `余量 ${remainAbs} 次（方舟"次"按 token 折算+模型倍率扣减，为折算额度单位，非可发起请求数；档位基准 2026-07 官网口径）`;
-      }
-    }
+    // 方舟计量口径官方未公开（名义"次"、实扣按 token×倍率），绝对量无法确证 → 只展示官方实时百分比，不伪造单位
     items.push(item);
   }
   return { ok: true, items, extra: { mode: 'api' } };
