@@ -184,8 +184,9 @@ async function collectHttp(cfg, p) {
       extra: {},
     };
     if (expiryMs) item.expiresAt = new Date(expiryMs).toISOString();
-    // Coding Plan 窗口额度按档位官方规格（次）换算：剩余绝对量 ≈ 总量 ×(100-已用%)/100
-    // 规格来源：官方活动/购买页（Pro: 会话6,000次/周45,000次/月90,000次；Lite 减半档），有倍率消耗、按次近似
+    // Coding Plan 窗口额度按档位官方规格换算剩余（次/窗口）。
+    // ⚠ 方舟名义按"次"，实际按 token 折算+模型倍率扣减（usage≈max(round(tokens/token_limit),1)，各模型 2~6x）。
+    //   故"次"为折算额度单位（≈积分），非可发起请求数；规格为 2026-07 官网口径，仅供参考。
     if (product === 'coding-plan') {
       const spec = CODING_PLAN_WINDOWS[tier];
       const specTotal = spec && spec[level];
@@ -196,7 +197,7 @@ async function collectHttp(cfg, p) {
         item.used = specTotal - remainAbs;
         item.remaining = remainAbs;
         item.unit = '次';
-        item.extra.note = `约剩 ${remainAbs} 次（Coding Plan ${String(tier).toUpperCase()} 官方窗口额度 ${specTotal} 次 × 剩 ${(100 - usedPct).toFixed(0)}%，含倍率波动，仅供参考）`;
+        item.extra.note = `余量 ${remainAbs} 次（方舟"次"按 token 折算+模型倍率扣减，为折算额度单位，非可发起请求数；档位基准 2026-07 官网口径）`;
       }
     }
     items.push(item);
