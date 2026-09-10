@@ -625,7 +625,7 @@ function providerName(pid) {
 }
 
 // ---- 分栏：主力 / 备用 ----
-const MAIN_TAB_IDS = ['ark', 'ark2', 'zhipu', 'deepseek'];
+const MAIN_TAB_IDS = ['ark', 'zhipu', 'deepseek'];
 let activeTab = localStorage.getItem('quotaTab') === 'backup' ? 'backup' : 'main';
 
 function renderTabs(allCards) {
@@ -923,10 +923,15 @@ async function renderAuth(pid) {
   $('authGoRow').classList.remove('hidden');
   $('authGoBtn').textContent = cookieCapable ? '去官网授权' : '去官网获取密钥';
   $('authSyncBtn').classList.toggle('hidden', !cookieCapable);
+  // 备用 tab 的平台用 Edge 授权（端口 9223），主力用 Chrome（9222）
+  const BACKUP_BROWSER_IDS = ['ark2', 'bailian', 'minimax', 'tencent'];
+  const useEdge = BACKUP_BROWSER_IDS.includes(pid);
+  const browserLabel = useEdge ? 'Edge' : 'Chrome';
+  const debugPort = useEdge ? 9223 : 9222;
   $('authTip').innerHTML = pid === 'deepseek'
     ? '先<b>打开并登录 platform.deepseek.com</b>（标签页保持开启）→ 回来点「我已授权 · 保存会话」：扩展会读取 Cookie + 页面 localStorage 里的会话令牌。未装扩展时也可手动粘贴下面字段（会话令牌过期后需重新同步）。'
     : cookieCapable
-      ? '登录官网后点「我已授权 · 保存会话」会连接<b>本机正在运行的 Chrome</b>读取会话。首次需用 <code>--remote-debugging-port=9222</code> 重启一次 Chrome（点保存会话失败时会提示命令）；也可手动粘贴下面字段。'
+      ? `登录官网后点「我已授权 · 保存会话」会连接/自动启动本机 <b>${browserLabel}</b>（端口 <code>${debugPort}</code>）读取会话；也可手动粘贴下面字段。`
       : '该平台用🔑密钥鉴权：点「去官网获取密钥」到控制台拿 AK/SK 或 API Key，粘贴到下面保存即可（无需浏览器 Cookie）。';
   const list = $('authList');
   const rows = pv.fields.map((f) => `

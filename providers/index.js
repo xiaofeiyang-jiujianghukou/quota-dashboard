@@ -8,13 +8,13 @@ import * as tencent from './tencent.js';
 
 export const providers = [
   ark, // 主力：方舟主账号
-  ark.ark2, // 主力：方舟第二个账号（config.providers.ark2）
   zhipu, // 主力：智谱
   deepseek, // 主力：DeepSeek
+  ark.ark2, // 备用：方舟第二个账号（config.providers.ark2）
   bailian, // 备用：百炼
   minimax, // 备用：MiniMax
   tencent, // 备用：混元
 ];
 
 // 「主力」tab 包含的 provider id（其余进「备用」tab）
-export const MAIN_TAB_IDS = ['ark', 'ark2', 'zhipu', 'deepseek'];
+export const MAIN_TAB_IDS = ['ark', 'zhipu', 'deepseek'];
