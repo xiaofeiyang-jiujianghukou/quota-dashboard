@@ -167,6 +167,15 @@
     padding: 8px; font-size: 12.5px; cursor: pointer;
   }
   .more-btn:hover { color: var(--text); border-color: var(--blue); }
+  /* 主力 / 备用 分栏 tab */
+  .tabs { display: flex; gap: 8px; margin: 14px 0 10px; }
+  .tab-btn {
+    background: var(--panel2); color: var(--muted); border: 1px solid var(--border);
+    border-radius: 8px; padding: 7px 16px; font-size: 13px; cursor: pointer;
+  }
+  .tab-btn:hover { color: var(--text); border-color: var(--blue); }
+  .tab-btn.active { color: var(--text); border-color: var(--blue); background: var(--panel); font-weight: 600; }
+  .tab-btn .cnt { color: var(--muted); font-weight: 400; margin-left: 4px; }
   .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: sp 1s linear infinite; vertical-align: -2px; margin-right: 6px; }
   @keyframes sp { to { transform: rotate(360deg); } }
 
@@ -248,6 +257,7 @@
     </div>
   </header>
 
+  <div class="tabs" id="tabs"></div>
   <div class="statusbar" id="statusbar"></div>
   <div class="grid" id="grid"></div>
 
@@ -352,6 +362,7 @@ function isoShort(iso) {
 function providerColor(id) {
   return {
     ark: '#e25555',       // 火山红
+    ark2: '#ff8f7a',      // 火山红（第二账号，浅一档）
     bailian: '#ff7a45',   // 阿里橙
     zhipu: '#8b5cf6',     // 智谱紫
     minimax: '#2ecc71',   // 绿
@@ -544,11 +555,14 @@ function render() {
     sb.innerHTML = chips;
   }
 
-  // 卡片
+  // 卡片（按当前 tab 过滤：主力 / 备用）
   grid.innerHTML = '';
-  const cards = state.providers.filter((p) => !p.skipped || p.items.length);
+  const inTab = (id) => (activeTab === 'main' ? MAIN_TAB_IDS.includes(id) : !MAIN_TAB_IDS.includes(id));
+  const allCards = state.providers.filter((p) => !p.skipped || p.items.length);
+  const cards = allCards.filter((p) => inTab(p.id));
+  renderTabs(allCards);
   if (cards.length === 0) {
-    grid.innerHTML = `<div class="empty">没有启用任何提供商，请检查 config.json</div>`;
+    grid.innerHTML = `<div class="empty">该分栏下暂无提供商</div>`;
     return;
   }
   for (const pv of cards) {
@@ -607,7 +621,27 @@ function render() {
 }
 
 function providerName(pid) {
-  return { ark: '方舟', bailian: '百炼', zhipu: '智谱', minimax: 'MiniMax', tencent: '混元', deepseek: 'DeepSeek' }[pid] || pid;
+  return { ark: '方舟', ark2: '方舟②', bailian: '百炼', zhipu: '智谱', minimax: 'MiniMax', tencent: '混元', deepseek: 'DeepSeek' }[pid] || pid;
+}
+
+// ---- 分栏：主力 / 备用 ----
+const MAIN_TAB_IDS = ['ark', 'ark2', 'zhipu', 'deepseek'];
+let activeTab = localStorage.getItem('quotaTab') === 'backup' ? 'backup' : 'main';
+
+function renderTabs(allCards) {
+  const el = $('tabs');
+  if (!el) return;
+  const cnt = (main) => allCards.filter((p) => (main ? MAIN_TAB_IDS.includes(p.id) : !MAIN_TAB_IDS.includes(p.id))).length;
+  el.innerHTML = `
+    <button class="tab-btn ${activeTab === 'main' ? 'active' : ''}" data-tab="main">主力<span class="cnt">${cnt(true)}</span></button>
+    <button class="tab-btn ${activeTab === 'backup' ? 'active' : ''}" data-tab="backup">备用<span class="cnt">${cnt(false)}</span></button>`;
+  el.querySelectorAll('.tab-btn').forEach((b) =>
+    b.addEventListener('click', () => {
+      activeTab = b.dataset.tab;
+      localStorage.setItem('quotaTab', activeTab);
+      render();
+    })
+  );
 }
 
 function tick() {

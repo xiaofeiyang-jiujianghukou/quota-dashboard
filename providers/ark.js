@@ -29,18 +29,34 @@ const VOLC_VERSION = '2024-01-01';
 const VOLC_SERVICE = 'ark';
 
 export async function collect(cfg) {
-  const p = cfg.providers.ark;
+  return collectFor(cfg, 'ark', '方舟');
+}
+
+/** 第二个方舟账号（另一份订阅）：配置在 config.providers.ark2，展示为「方舟②」 */
+export const ark2 = {
+  id: 'ark2',
+  name: '方舟②',
+  collect: (cfg) => collectFor(cfg, 'ark2', '方舟②'),
+};
+
+async function collectFor(cfg, pid, displayName) {
+  const p = cfg.providers[pid] || {};
   if (!p.enabled) return { ok: false, skipped: true, items: [] };
 
   if (!p.accessKeyId || !p.secretKey) {
     return {
       ok: false,
       items: [],
-      error: '未配置方舟 AK/SK',
-      detail: '在 config.json 配置 ark.accessKeyId / secretKey（火山引擎控制台 → 访问控制 IAM → API 访问密钥）',
+      error: `未配置 ${displayName} AK/SK`,
+      detail: `在 config.json 配置 ${pid}.accessKeyId / secretKey（火山引擎控制台 → 访问控制 IAM → API 访问密钥）`,
     };
   }
-  return collectHttp(cfg, p);
+  const r = await collectHttp(cfg, p);
+  // 第二个实例条目 key 换前缀，避免与主账号 key 冲突
+  if (pid !== 'ark' && Array.isArray(r.items)) {
+    for (const it of r.items) if (it.key) it.key = it.key.replace(/^ark-/, `${pid}-`);
+  }
+  return r;
 }
 
 async function callVolc(p, action, timeoutMs) {
