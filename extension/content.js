@@ -11,10 +11,28 @@ window.addEventListener('message', (e) => {
     chrome.runtime
       .sendMessage({ type: 'sync-all' })
       .then((res) => {
-        window.postMessage({ type: 'quota-sync-done', ok: !!(res && res.ok) }, '*');
+        window.postMessage({ type: 'quota-sync-done', ok: !!(res && res.ok), deepseek: (res && res.deepseek) || '' }, '*');
       })
       .catch(() => {
         window.postMessage({ type: 'quota-sync-done', ok: false }, '*');
       });
+  }
+});
+
+// background 请求：回传当前页 localStorage 快照（DeepSeek 的 Bearer 会话令牌存于 localStorage 而非 cookie，
+// 需要用户开着已登录的 platform.deepseek.com 标签页才能读到）
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg && msg.type === 'read-localstorage') {
+    const snapshot = {};
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        const v = localStorage.getItem(k);
+        if (v && v.length < 200000) snapshot[k] = v;
+      }
+    } catch {
+      /* ignore */
+    }
+    sendResponse({ ok: true, url: location.href, localStorage: snapshot });
   }
 });

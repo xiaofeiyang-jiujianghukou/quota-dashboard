@@ -43,6 +43,12 @@
   <label for="token">写接口鉴权 token（云端 config.json 的 authToken，留空=云端未鉴权）</label>
   <input id="token" type="password" placeholder="可选" autocomplete="off" spellcheck="false" />
 
+  <label for="arkSlot">方舟账号位（本浏览器登录的是哪个方舟账号）</label>
+  <select id="arkSlot" style="width:100%;box-sizing:border-box;background:#171a23;color:#e6e8ee;border:1px solid #2a2f3a;border-radius:8px;padding:8px 10px;font-size:13px">
+    <option value="ark">方舟（主账号）</option>
+    <option value="ark2">方舟②（第二个账号）</option>
+  </select>
+
   <div class="row">
     <button class="primary" id="saveBtn">保存</button>
     <button id="testBtn">测试连接</button>
@@ -51,7 +57,8 @@
   <div id="msg"></div>
 
   <div class="hint">
-    说明：装好后<b>无需任何操作</b>。你在 Chrome 里登录方舟/智谱/MiniMax，扩展会自动抓取会话并推送云端（同平台 10 分钟内去重）。<br/>
+    说明：装好后<b>无需任何操作</b>。你在本浏览器里登录方舟/智谱/MiniMax/DeepSeek，扩展会自动抓取会话并推送云端（同平台 10 分钟内去重）。<br/>
+    <b>两个方舟账号</b>：同一浏览器只能保持一个方舟账号的登录态 → 用两个浏览器（如 Chrome + Edge）各装一次本扩展，分别把「方舟账号位」设为「方舟（主账号）」和「方舟②」。<br/>
     云端 <code>/api/auth/update</code> 需配置 <code>authToken</code> 时，请在上面填一致的 token。
   </div>
 

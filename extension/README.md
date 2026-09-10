@@ -1,6 +1,6 @@
 # 会话同步扩展（Chrome）
 
-登录**方舟 / 智谱 / MiniMax** 后，自动把控制台会话推送到你的云端 AI 套餐余量看板，**全程零操作**。
+登录**方舟 / 智谱 / MiniMax / DeepSeek** 后，自动把控制台会话推送到你的云端 AI 套餐余量看板，**全程零操作**。
 
 ## 为什么需要它
 
@@ -35,9 +35,16 @@
 |---|---|---|
 | 方舟 | 登录时 cookie `userInfo`/`digest` 写入 | sessionCookie + csrfToken + webId |
 | MiniMax | 登录时 cookie `_token` 写入 | sessionCookie + groupId |
-| 智谱 | 访问 coding plan 页面时 API 请求头 | sessionToken（JWT） |
+| 智谱 | 登录时 cookie `bigmodel_token_production` 写入 | sessionToken（JWT） |
+| DeepSeek | cookie `HWWAFSESID` 变化（10 分钟节流） | sessionCookie + sessionToken（Bearer，从已登录标签页的 localStorage 读取） |
+
+DeepSeek 特殊：Bearer 令牌不在 cookie 里，而在 `platform.deepseek.com` 页面的 localStorage——**需保持一个已登录的 platform.deepseek.com 标签页开启**，同步才能读到令牌。
 
 抓到的字段自动 `POST` 到云端 `/api/auth/update`（带 token），同平台 10 分钟内去重。
+
+## 更新扩展
+
+扩展代码更新后，到 `chrome://extensions` 点该扩展卡片上的「↻ 重新加载」即可生效（无需重新配置）。
 
 ## 会话过期了怎么办
 

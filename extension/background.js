@@ -9,11 +9,12 @@ const SYNC_INTERVAL_MS = 10 * 60 * 1000; // 同平台 10 分钟内去重
 const pending = new Set(); // 并发去重
 
 async function getConfig() {
-  const cfg = await chrome.storage.local.get(['dashboard', 'token', 'lastSync']);
+  const cfg = await chrome.storage.local.get(['dashboard', 'token', 'lastSync', 'arkSlot']);
   return {
     dashboard: (cfg.dashboard || '').trim().replace(/\/+$/, ''),
     token: (cfg.token || '').trim(),
     lastSync: cfg.lastSync || {},
+    arkSlot: cfg.arkSlot === 'ark2' ? 'ark2' : 'ark', // 本浏览器登录的方舟账号位
   };
 }
 
@@ -72,8 +73,11 @@ async function allCookiesFor(domainSuffix, partitionSites = []) {
   return out;
 }
 
-/** 方舟：cookie → sessionCookie + csrfToken + webId（userInfo/digest 是登录核心，值非空才推） */
+/** 方舟：cookie → sessionCookie + csrfToken + webId（userInfo/digest 是登录核心，值非空才推）
+ *  推到哪个账号位由设置里的「方舟账号位」决定：ark=主账号，ark2=第二个账号（另一浏览器登录） */
 async function syncArk(force = false) {
+  const cfg = await getConfig();
+  const slot = cfg.arkSlot || 'ark';
   const list = await allCookiesFor('volcengine.com', ['https://volcengine.com', 'https://console.volcengine.com']);
   const userInfo = list.find((c) => c.name === 'userInfo');
   const digest = list.find((c) => c.name === 'digest');
@@ -86,7 +90,7 @@ async function syncArk(force = false) {
   if (csrf && csrf.value) fields.csrfToken = csrf.value;
   const webId = list.find((c) => c.name === 's_v_web_id' || c.name === 'monitor_huoshan_web_id');
   if (webId && webId.value) fields.webId = webId.value;
-  await push('ark', fields, force);
+  await push(slot, fields, force);
 }
 
 /** MiniMax：cookie → sessionCookie + groupId（_token 值非空才推） */
@@ -116,6 +120,67 @@ async function syncZhipu(force = false) {
   }
 }
 
+// ---- DeepSeek：cookie + localStorage 双通道 ----
+// HWWAFSESID 等 cookie 静默读取；Bearer 会话令牌存于 platform.deepseek.com 页面的 localStorage
+// （键名以 userToken 优先，回退到任意含 token 的键；值须为 40+ 位 base64 字符集），需要该站点有已登录的标签页。
+
+function extractDsToken(snapshot) {
+  const parse = (v) => {
+    const s = String(v).trim().replace(/^"|"$/g, '');
+    if (/^[A-Za-z0-9+/=_-]{40,}$/.test(s)) return s;
+    try {
+      let hit = null;
+      const walk = (o) => {
+        if (hit || !o || typeof o !== 'object') return;
+        for (const val of Object.values(o)) {
+          if (typeof val === 'string' && /^[A-Za-z0-9+/=_-]{40,}$/.test(val)) { hit = val; return; }
+          if (val && typeof val === 'object') walk(val);
+        }
+      };
+      walk(JSON.parse(s));
+      return hit;
+    } catch {
+      return null;
+    }
+  };
+  for (const key of ['userToken', 'token', 'accessToken', 'auth_token']) {
+    if (snapshot[key]) { const t = parse(snapshot[key]); if (t) return t; }
+  }
+  for (const [k, v] of Object.entries(snapshot)) {
+    if (/token/i.test(k)) { const t = parse(v); if (t) return t; }
+  }
+  return null;
+}
+
+/** 从已打开的 platform.deepseek.com 标签页读 localStorage 提取会话令牌 */
+async function readDsToken() {
+  try {
+    const tabs = await chrome.tabs.query({ url: 'https://platform.deepseek.com/*' });
+    for (const tab of tabs) {
+      const res = await chrome.tabs.sendMessage(tab.id, { type: 'read-localstorage' }).catch(() => null);
+      if (res && res.localStorage) {
+        const t = extractDsToken(res.localStorage);
+        if (t) return t;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+async function syncDeepseek(force = false) {
+  const list = await allCookiesFor('deepseek.com');
+  const waf = list.find((c) => c.name === 'HWWAFSESID');
+  const token = await readDsToken();
+  if (!waf || !waf.value || !token) {
+    console.log('[会话同步] DeepSeek 会话不完整（缺 HWWAFSESID cookie 或 localStorage 令牌，需打开已登录的 platform.deepseek.com 标签页），跳过');
+    return 'no-session';
+  }
+  await push('deepseek', { sessionCookie: list.map((c) => `${c.name}=${c.value}`).join('; '), sessionToken: token }, force);
+  return 'ok';
+}
+
 // 登录时 cookie 变化 → 防抖后自动同步（等连续 3 秒无新 cookie 写入，说明已写完，立即触发）
 const debounceTimers = {};
 function debouncedSync(pid, fn, delay = 3000) {
@@ -132,15 +197,18 @@ chrome.cookies.onChanged.addListener((info) => {
   if (cookie.domain.endsWith('volcengine.com') && ['userInfo', 'digest'].includes(cookie.name)) debouncedSync('ark', syncArk);
   if (cookie.domain.endsWith('minimaxi.com') && cookie.name === '_token') debouncedSync('minimax', syncMinimax);
   if (cookie.domain.endsWith('bigmodel.cn') && cookie.name === 'bigmodel_token_production') debouncedSync('zhipu', syncZhipu);
+  // DeepSeek 的 HWWAFSESID 较常轮换，靠 push() 内部 10 分钟节流去重
+  if (cookie.domain.endsWith('deepseek.com') && cookie.name === 'HWWAFSESID') debouncedSync('deepseek', syncDeepseek);
 });
 
-// 「立即同步」：清节流 → 三平台全部静默读取并推送（无需打开标签页）
+// 「立即同步」：清节流 → 全部平台静默读取并推送（无需打开标签页；DeepSeek 令牌除外，需 platform.deepseek.com 登录标签页）
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'sync-all') {
     (async () => {
       await chrome.storage.local.set({ lastSync: {} });
       await Promise.all([syncArk(true), syncMinimax(true), syncZhipu(true)]);
-      sendResponse({ ok: true });
+      const deepseek = await syncDeepseek(true);
+      sendResponse({ ok: true, deepseek });
     })();
     return true;
   }
@@ -152,10 +220,12 @@ async function fingerprint() {
   const mmList = await allCookiesFor('minimaxi.com');
   const zpList = await allCookiesFor('bigmodel.cn');
   const zpTok = zpList.find((c) => c.name === 'bigmodel_token_production');
+  const dsList = await allCookiesFor('deepseek.com');
   return {
     ark: arkList.map((c) => `${c.name}=${c.value}`).join('; '),
     minimax: mmList.map((c) => `${c.name}=${c.value}`).join('; '),
     zhipu: zpTok ? zpTok.value : '',
+    deepseek: dsList.map((c) => `${c.name}=${c.value}`).join('; '),
   };
 }
 
@@ -167,6 +237,8 @@ async function checkAndSync() {
   if (fp.ark && fp.ark !== prev.ark) await syncArk(true);
   if (fp.minimax && fp.minimax !== prev.minimax) await syncMinimax(true);
   if (fp.zhipu && fp.zhipu !== prev.zhipu) await syncZhipu(true);
+  // DeepSeek WAF cookie 常轮换，走非 force（受 10 分钟节流），避免频繁推送
+  if (fp.deepseek && fp.deepseek !== prev.deepseek) await syncDeepseek(false);
   await chrome.storage.local.set({ lastValues: fp });
 }
 

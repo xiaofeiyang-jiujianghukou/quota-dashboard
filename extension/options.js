@@ -8,17 +8,20 @@ function show(text, cls) {
 }
 
 async function load() {
-  const cfg = await chrome.storage.local.get(['dashboard', 'token']);
+  const cfg = await chrome.storage.local.get(['dashboard', 'token', 'arkSlot']);
   $('dashboard').value = cfg.dashboard || '';
   $('token').value = cfg.token || '';
+  $('arkSlot').value = cfg.arkSlot === 'ark2' ? 'ark2' : 'ark';
 }
 
 async function save() {
   const dashboard = $('dashboard').value.trim();
   const token = $('token').value.trim();
-  await chrome.storage.local.set({ dashboard, token });
-  show('✅ 已保存', 'ok');
-  setTimeout(() => (msg.textContent = ''), 2000);
+  const arkSlot = $('arkSlot').value === 'ark2' ? 'ark2' : 'ark';
+  await chrome.storage.local.set({ dashboard, token, arkSlot });
+  await chrome.storage.local.set({ lastSync: {} }); // 换账号位后清节流，立即重推
+  show('✅ 已保存（方舟账号位：' + (arkSlot === 'ark2' ? '方舟②' : '主账号') + '）', 'ok');
+  setTimeout(() => (msg.textContent = ''), 2600);
 }
 
 async function test() {

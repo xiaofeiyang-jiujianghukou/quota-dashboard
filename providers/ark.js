@@ -43,12 +43,14 @@ async function collectFor(cfg, pid, displayName) {
   const p = cfg.providers[pid] || {};
   if (!p.enabled) return { ok: false, skipped: true, items: [] };
 
-  if (!p.accessKeyId || !p.secretKey) {
+  const hasAK = !!(p.accessKeyId && p.secretKey);
+  const hasCookie = !!(p.sessionCookie && p.csrfToken && p.webId);
+  if (!hasAK && !hasCookie) {
     return {
       ok: false,
       items: [],
-      error: `未配置 ${displayName} AK/SK`,
-      detail: `在 config.json 配置 ${pid}.accessKeyId / secretKey（火山引擎控制台 → 访问控制 IAM → API 访问密钥）`,
+      error: `未配置 ${displayName} 凭据`,
+      detail: `两种方式二选一：① ${pid}.accessKeyId / secretKey（AK/SK）；② 浏览器扩展同步控制台 Cookie（sessionCookie + csrfToken + webId），无需 AK/SK`,
     };
   }
   const r = await collectHttp(cfg, p);
@@ -57,6 +59,43 @@ async function collectFor(cfg, pid, displayName) {
     for (const it of r.items) if (it.key) it.key = it.key.replace(/^ark-/, `${pid}-`);
   }
   return r;
+}
+
+/** 控制台代理调用（仅需 Cookie + csrfToken + webId，无需 AK/SK）：返回结构与 OpenAPI 一致 */
+async function callVolcConsole(p, action, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs || 30000);
+  try {
+    const region = p.region || 'cn-beijing';
+    const url = `https://console.volcengine.com/api/top/ark/${region}/2024-01-01/${action}?`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json, text/plain, */*',
+        'content-type': 'application/json',
+        cookie: p.sessionCookie,
+        origin: 'https://console.volcengine.com',
+        referer: `https://console.volcengine.com/ark/region:${region}/subscription/coding-plan?tab=usage`,
+        'x-csrf-token': p.csrfToken || '',
+        'x-web-id': p.webId || '',
+      },
+      body: '',
+      signal: controller.signal,
+    });
+    const json = await res.json();
+    const err = json.ResponseMetadata && json.ResponseMetadata.Error;
+    if (err) throw new Error(`[${err.Code}] ${err.Message || ''}`);
+    return json.Result || {};
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** 有 AK/SK 走 OpenAPI 签名；否则退化为控制台 Cookie 代理（两者数据一致） */
+async function callVolcAuto(p, action, timeoutMs) {
+  if (p.accessKeyId && p.secretKey) return callVolc(p, action, timeoutMs);
+  if (p.sessionCookie && p.csrfToken && p.webId) return callVolcConsole(p, action, timeoutMs);
+  throw new Error('未配置方舟凭据（AK/SK 或 控制台 Cookie+CSRF+WebId 二者其一）');
 }
 
 async function callVolc(p, action, timeoutMs) {
@@ -118,7 +157,7 @@ async function collectHttp(cfg, p) {
   let quotas = [];
   let product = 'coding-plan';
   try {
-    const result = await callVolc(p, 'GetCodingPlanUsage', timeoutMs);
+    const result = await callVolcAuto(p, 'GetCodingPlanUsage', timeoutMs);
     statusNote = result.Status || '';
     quotas = Array.isArray(result.QuotaUsage) ? result.QuotaUsage : [];
   } catch (e) {
@@ -128,7 +167,7 @@ async function collectHttp(cfg, p) {
 
   if (quotas.length === 0) {
     // Agent Plan（AFP）回退: Result.AFPFiveHour/AFPWeekly/AFPMonthly: {Quota, Used, ResetTime(毫秒)}
-    const result = await callVolc(p, 'GetAFPUsage', timeoutMs);
+    const result = await callVolcAuto(p, 'GetAFPUsage', timeoutMs);
     product = 'agent-plan';
     const windows = [
       ['AFPFiveHour', '5 小时'],
