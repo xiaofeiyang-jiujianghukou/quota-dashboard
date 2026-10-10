@@ -30,15 +30,30 @@
 # 1. 进入目录
 cd quota-dashboard
 
-# 2. 首次运行会自动从 config.example.json 生成 config.json（权限 600）
-#    编辑 config.json 填入各平台密钥/AK-SK（方舟、百炼配 AK/SK 即可纯 HTTP 查询，无需安装任何客户端）
+# 2. 首次运行会自动从 config.example.json 生成 config.json（权限 600）；
+#    旧 config.json providers 段会一次性自动迁移到 SQLite（data/dashboard.db）
 node server.js
 
 # 3. 浏览器打开
-#    http://127.0.0.1:8899
+#    http://127.0.0.1:8899        ← 面板：只显示"有效"供应商的实时余量
+#    http://127.0.0.1:8899/config ← 配置页：供应商授权 / 启停 / 有效期管理
 ```
 
-## 密钥配置（config.json）
+## 配置与面板分离（v2 架构）
+
+- **面板 `/`**：只呈现**有效**供应商的余量/到期数据，纯展示。
+- **配置页 `/config`**：管理各供应商的授权凭据（密钥/Cookie）与生命周期：
+  - **主动生效/失效**：一键「启用 / 停用」，停用立即从看板移除；
+  - **被动失效**：授权有效期由每次授权/采集后从**平台接口拉取的最新数据自动落库**（`providers.expires_at`），到期系统自动判为「已过期」并从看板移除；配置页只读展示，不接受手填；
+  - 状态机：`有效 active` / `已停用 disabled` / `已过期 expired` / `未配置 unconfigured`（`lib/lifecycle.js`）。
+- **存储分层**：
+  - `config.json` — 仅全局设置（端口、提醒规则、定价覆盖等）；
+  - `data/dashboard.db`（SQLite，`node:sqlite` 内置模块，零第三方依赖）— 供应商授权凭据、启停状态、**平台拉取的授权有效期**（`lib/store.js`，采集后由 `lib/runner.js` 自动回写）。
+
+## 密钥配置（config.json / SQLite）
+
+> v2 起 **供应商密钥与启停不再写在 config.json**：到配置页 `http://127.0.0.1:8899/config` 在线填写，
+> 数据落库 `data/dashboard.db`。config.json 保留全局设置（旧文件里的 providers 段首次启动自动迁移，之后不再读取）：
 
 ```jsonc
 {

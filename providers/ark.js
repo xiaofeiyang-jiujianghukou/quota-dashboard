@@ -1,13 +1,12 @@
 // 方舟（火山引擎）— Coding/Agent Plan 配额（纯 HTTP，无需安装任何客户端）
-// 数据源: 火山引擎 AK/SK 调公开 TOP OpenAPI（签名 V4，service=ark）
-//   POST https://open.volcengineapi.com/?Action=GetCodingPlanUsage&Version=2024-01-01
-//   POST https://open.volcengineapi.com/?Action=GetAFPUsage&Version=2024-01-01
-// 说明: OpenAPI 返回各窗口百分比 + 重置时间；套餐到期时间不在该接口中，
+// 数据源: 控制台代理接口（仅需登录 Cookie + CSRF Token，无需 AK/SK）
+//   POST https://console.volcengine.com/api/top/ark/<region>/2024-01-01/GetCodingPlanUsage
+//   POST https://console.volcengine.com/api/top/ark/<region>/2024-01-01/GetAFPUsage
+// 说明: 该通道与 OpenAPI 数据一致；套餐到期时间不在其中，
 //       若本机存在 ~/.arkcli/config.yaml 则读取 expires_at 作为补充（仅读文件，不依赖 CLI）
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { volcSign } from '../lib/signers.js';
 import { planPrice, planPriceNum, planQuotaText } from '../lib/pricing.js';
 import { toNum } from './util.js';
 
@@ -24,33 +23,24 @@ const PERIOD_LABELS = {
   daily: '每日',
 };
 
-const VOLC_API = 'https://open.volcengineapi.com/';
 const VOLC_VERSION = '2024-01-01';
-const VOLC_SERVICE = 'ark';
 
-export async function collect(cfg) {
-  return collectFor(cfg, 'ark', '方舟');
+// pid 可传任意方舟实例 id（ark / ark2 / ark3 …用户在配置页动态新增），displayName 可覆盖展示名
+export async function collect(cfg, pid = 'ark', displayName) {
+  return collectFor(cfg, pid, displayName || '方舟');
 }
-
-/** 第二个方舟账号（另一份订阅）：配置在 config.providers.ark2，展示为「方舟②」 */
-export const ark2 = {
-  id: 'ark2',
-  name: '方舟②',
-  collect: (cfg) => collectFor(cfg, 'ark2', '方舟②'),
-};
 
 async function collectFor(cfg, pid, displayName) {
   const p = cfg.providers[pid] || {};
   if (!p.enabled) return { ok: false, skipped: true, items: [] };
 
-  const hasAK = !!(p.accessKeyId && p.secretKey);
-  const hasCookie = !!(p.sessionCookie && p.csrfToken && p.webId);
-  if (!hasAK && !hasCookie) {
+  const hasCookie = !!(p.sessionCookie && p.csrfToken);
+  if (!hasCookie) {
     return {
       ok: false,
       items: [],
       error: `未配置 ${displayName} 凭据`,
-      detail: `两种方式二选一：① ${pid}.accessKeyId / secretKey（AK/SK）；② 浏览器扩展同步控制台 Cookie（sessionCookie + csrfToken + webId），无需 AK/SK`,
+      detail: `配置页粘贴控制台 Cookie + CSRF Token 即可（无需 AK/SK）`,
     };
   }
   const r = await collectHttp(cfg, p);
@@ -61,7 +51,7 @@ async function collectFor(cfg, pid, displayName) {
   return r;
 }
 
-/** 控制台代理调用（仅需 Cookie + csrfToken + webId，无需 AK/SK）：返回结构与 OpenAPI 一致 */
+/** 控制台代理调用（仅需 Cookie + csrfToken）：返回结构与 OpenAPI 一致 */
 async function callVolcConsole(p, action, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs || 30000);
@@ -91,44 +81,6 @@ async function callVolcConsole(p, action, timeoutMs) {
   }
 }
 
-/** 有 AK/SK 走 OpenAPI 签名；否则退化为控制台 Cookie 代理（两者数据一致） */
-async function callVolcAuto(p, action, timeoutMs) {
-  if (p.accessKeyId && p.secretKey) return callVolc(p, action, timeoutMs);
-  if (p.sessionCookie && p.csrfToken && p.webId) return callVolcConsole(p, action, timeoutMs);
-  throw new Error('未配置方舟凭据（AK/SK 或 控制台 Cookie+CSRF+WebId 二者其一）');
-}
-
-async function callVolc(p, action, timeoutMs) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs || 30000);
-  try {
-    const headers = volcSign({
-      action,
-      version: VOLC_VERSION,
-      region: p.region || 'cn-beijing',
-      accessKeyId: p.accessKeyId,
-      secretKey: p.secretKey,
-      service: VOLC_SERVICE,
-    });
-    const url = `${VOLC_API}?Action=${action}&Version=${VOLC_VERSION}`;
-    const res = await fetch(url, { method: 'POST', headers, body: '', signal: controller.signal });
-    const text = await res.text();
-    let json;
-    try {
-      json = JSON.parse(text);
-    } catch {
-      throw new Error(`返回非 JSON（HTTP ${res.status}）：${text.slice(0, 200)}`);
-    }
-    const err = json.ResponseMetadata && json.ResponseMetadata.Error;
-    if (!res.ok || err) {
-      throw new Error(`[${err ? err.Code : res.status}] ${err ? err.Message : res.statusText}`);
-    }
-    return json.Result || {};
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 function epochToISO(ms) {
   const n = toNum(ms);
   if (n == null || n <= 0) return null;
@@ -151,29 +103,31 @@ async function collectHttp(cfg, p) {
   const tier = (session && session.tier) || p.planTier || meta.planTier || '';
   const expiryMs = (session && session.endTimeMs) || meta.expiresAt || p.expiresAt || null;
   const items = [];
+
+  // 两个套餐可以同时持有：Coding Plan 与 Agent Plan 各自抓，全部展示（不再二选一）
+  const planBlocks = [];
   let statusNote = '';
 
-  // Coding Plan 优先（QuotaUsage 元素: { Level, Percent, ResetTimestamp(秒) }）
-  let quotas = [];
-  let product = 'coding-plan';
+  // ---- ① Coding Plan（QuotaUsage 元素: { Level, Percent, ResetTimestamp(秒) }）----
   try {
-    const result = await callVolcAuto(p, 'GetCodingPlanUsage', timeoutMs);
+    const result = await callVolcConsole(p, 'GetCodingPlanUsage', timeoutMs);
     statusNote = result.Status || '';
-    quotas = Array.isArray(result.QuotaUsage) ? result.QuotaUsage : [];
+    const quotas = Array.isArray(result.QuotaUsage) ? result.QuotaUsage : [];
+    if (quotas.length) planBlocks.push({ product: 'coding-plan', quotas });
   } catch (e) {
-    if (!/403|404|AccessDenied|NotFound/i.test(e.message)) throw e;
-    // 无 Coding Plan → 尝试 Agent Plan
+    if (!/403|404|AccessDenied|NotFound/i.test(e.message)) statusNote = e.message;
   }
 
-  if (quotas.length === 0) {
-    // Agent Plan（AFP）回退: Result.AFPFiveHour/AFPWeekly/AFPMonthly: {Quota, Used, ResetTime(毫秒)}
-    const result = await callVolcAuto(p, 'GetAFPUsage', timeoutMs);
-    product = 'agent-plan';
+  // ---- ② Agent Plan（AFP）：5小时/每日/每周/每月 ----
+  try {
+    const result = await callVolcConsole(p, 'GetAFPUsage', timeoutMs);
     const windows = [
       ['AFPFiveHour', '5 小时'],
+      ['AFPDaily', '每日'],
       ['AFPWeekly', '每周'],
       ['AFPMonthly', '每月'],
     ];
+    const quotas = [];
     for (const [key, label] of windows) {
       const w = result[key];
       if (!w) continue;
@@ -185,56 +139,172 @@ async function collectHttp(cfg, p) {
         Percent: (used / quota) * 100,
         ResetTimestamp: epochToISO(w.ResetTime),
         _afp: true,
+        _quota: quota,
+        _used: used,
       });
     }
-    if (quotas.length === 0) {
-      return {
-        ok: false,
-        items: [],
-        error: '账号下没有生效的 Coding/Agent Plan',
-        detail: `GetCodingPlanUsage / GetAFPUsage 均无配额窗口${statusNote ? `（Status=${statusNote}）` : ''}`,
-      };
-    }
+    if (quotas.length) planBlocks.push({ product: 'agent-plan', quotas, planType: result.PlanType || '' });
+  } catch (e) {
+    if (!statusNote) statusNote = e.message;
   }
 
-  const label = product === 'agent-plan' ? 'Agent Plan' : 'Coding Plan';
-  const planName =
-    product === 'agent-plan'
-      ? 'Agent Plan'
-      : `Coding Plan${tier ? ' ' + tier.toUpperCase() : ''}`;
-  // 价格优先用官方实时报价（EstimateSubscribePrice，需会话 cookie）；失败才回退内置表
-  let livePrice = null;
-  if (tier && p.sessionCookie) {
+  if (!planBlocks.length) {
+    return {
+      ok: false,
+      items: [],
+      error: '账号下没有生效的 Coding/Agent Plan',
+      noPlan: true, // 已授权但该账号无套餐：UI 按"信息"呈现，而不是报错
+      detail: `该账号已登录，但 GetCodingPlanUsage / GetAFPUsage 均无配额窗口${statusNote ? `（${statusNote}）` : ''}`,
+    };
+  }
+
+  // Agent Plan 档位：接口给 PlanType/BizInfo（small/medium/large），映射成展示名
+  const AFP_TIER = { small: 'Lite', light: 'Lite', lite: 'Lite', medium: 'Pro', pro: 'Pro', large: 'Max', high: 'Max', max: 'Max' };
+
+  // 两个套餐各自的订阅信息（到期时间不同，必须分开取）与官方实时价格
+  const planMeta = {};
+  for (const block of planBlocks) {
+    const isAfp = block.product === 'agent-plan';
+    const resType = isAfp ? 'AgentPlan' : 'CodingPlan';
+    const resName = isAfp ? 'RealAgentPlanPersonal' : '';
+    const biz = isAfp ? block.planType || 'medium' : tier || 'pro';
+    let sub = null;
     try {
-      livePrice = await estimateSubscribePrice(p, timeoutMs, tier);
+      sub = await fetchSubscription(p, timeoutMs, resType, resName);
     } catch {
-      livePrice = null;
+      sub = null;
+    }
+    let price = null;
+    try {
+      price = await estimateOrderPrice(p, timeoutMs, resType, sub ? sub.bizInfo : biz, resName);
+    } catch {
+      price = null;
+    }
+    const amount = price ? price.amount : null;
+    planMeta[block.product] = {
+      sub,
+      price: amount,
+      priceText: amount != null ? `¥${amount}/月${price.original && price.original !== amount ? `（原价 ¥${price.original}）` : ''}` : '',
+      expiresAtMs: sub && sub.endTimeMs ? sub.endTimeMs : null,
+      biz,
+    };
+  }
+  const codingMeta = planMeta['coding-plan'] || { price: null, priceText: '', expiresAtMs: null };
+  const codingPriceText = codingMeta.priceText || (tier ? planPrice(cfg, 'ark', tier) : '');
+  const codingPrice = codingMeta.price != null ? codingMeta.price : planPriceNum(cfg, 'ark', tier);
+
+  for (const block of planBlocks) {
+    const isAfp = block.product === 'agent-plan';
+    const meta = planMeta[block.product] || {};
+    const bizName = (meta.sub && meta.sub.bizInfo) || block.planType || '';
+    const afpTier = isAfp ? AFP_TIER[String(bizName).toLowerCase()] || String(bizName).toUpperCase() : '';
+    const label = isAfp ? 'Agent Plan' : 'Coding Plan';
+    const planName = isAfp ? `Agent Plan${afpTier ? ' ' + afpTier : ''}` : `Coding Plan${tier ? ' ' + tier.toUpperCase() : ''}`;
+    const priceText = meta.priceText || (isAfp ? '' : codingPriceText);
+    const price = meta.price != null ? meta.price : (isAfp ? null : codingPrice);
+    const pricePeriod = (meta.sub && meta.sub.period) || 'monthly';
+    const planExpiryMs = meta.expiresAtMs || expiryMs;
+    for (const q of block.quotas) {
+      const level = String(q.Level || '').toLowerCase();
+      const periodLabel = PERIOD_LABELS[level] || q.Level || '';
+      const resetAt = q._afp ? q.ResetTimestamp : epochToISO(toNum(q.ResetTimestamp) * 1000); // Coding Plan 为秒
+      const item = {
+        key: `ark-${block.product}-${level || items.length}`,
+        title: `${label} · ${periodLabel || level}`,
+        kind: 'plan',
+        planName,
+        priceText,
+        price,
+        pricePeriod,
+        quotaText: isAfp ? '' : planQuotaText(cfg, 'ark', tier),
+        percentUsed: toNum(q.Percent),
+        unit: 'used',
+        resetAt,
+        extra: isAfp ? { planType: bizName, autoRenew: !!(meta.sub && meta.sub.autoRenew) } : { autoRenew: !!(meta.sub && meta.sub.autoRenew) },
+      };
+      if (q._quota != null) {
+        item.total = q._quota;
+        item.used = q._used;
+        item.remaining = Math.max(0, q._quota - q._used);
+      }
+      if (planExpiryMs) item.expiresAt = new Date(planExpiryMs).toISOString();
+      items.push(item);
     }
   }
-  const priceText = livePrice != null ? `¥${livePrice}/月（官方实时价）` : planPrice(cfg, 'ark', tier);
-  const price = livePrice != null ? livePrice : planPriceNum(cfg, 'ark', tier);
-  for (const q of quotas) {
-    const level = String(q.Level || '').toLowerCase();
-    const periodLabel = PERIOD_LABELS[level] || q.Level || '';
-    const resetAt = q._afp ? q.ResetTimestamp : epochToISO(toNum(q.ResetTimestamp) * 1000); // Coding Plan 为秒
-    const item = {
-      key: `ark-${product}-${level || items.length}`,
-      title: `${label} · ${periodLabel || level}`,
-      kind: 'plan',
-      planName,
-      priceText,
-      price,
-      quotaText: planQuotaText(cfg, 'ark', tier),
-      percentUsed: toNum(q.Percent),
-      unit: 'used',
-      resetAt,
-      extra: {},
-    };
-    if (expiryMs) item.expiresAt = new Date(expiryMs).toISOString();
-    // 方舟计量口径官方未公开（名义"次"、实扣按 token×倍率），绝对量无法确证 → 只展示官方实时百分比，不伪造单位
-    items.push(item);
-  }
   return { ok: true, items, extra: { mode: 'api' } };
+}
+
+/**
+ * 取某个套餐的订阅信息（到期/档位/是否自动续费）。
+ * CodingPlan 与 AgentPlan 的 ResourceName 不同，要分别查。
+ */
+async function fetchSubscription(p, timeoutMs, resourceType, resourceName = '') {
+  const region = p.region || 'cn-beijing';
+  const url = `https://console.volcengine.com/api/top/ark/${region}/2024-01-01/ListSubscribeTrade?`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json, text/plain, */*',
+      'content-type': 'application/json',
+      cookie: p.sessionCookie,
+      origin: 'https://console.volcengine.com',
+      referer: `https://console.volcengine.com/ark/region:${region}/subscription/coding-plan`,
+      'x-csrf-token': p.csrfToken || '',
+      'x-web-id': p.webId || '',
+    },
+    body: JSON.stringify({
+      ResourceTypes: [resourceType],
+      ResourceNames: [resourceName],
+      BizInfos: resourceType === 'AgentPlan' ? ['small', 'medium', 'large'] : ['lite', 'pro'],
+      Quantity: 1,
+      Period: 'monthly',
+      Times: 1,
+    }),
+    signal: AbortSignal.timeout(timeoutMs || 15000),
+  });
+  const json = await res.json().catch(() => null);
+  const err = json && json.ResponseMetadata && json.ResponseMetadata.Error;
+  if (err) throw new Error(`[${err.Code}] ${err.Message || ''}`);
+  const list = (json && json.Result && json.Result.InfoList) || [];
+  const info = list.find((x) => x.Status === 'Running') || list[0] || null;
+  if (!info) return null;
+  return {
+    bizInfo: info.BizInfo || '',
+    endTimeMs: info.EndTime ? new Date(info.EndTime).getTime() : null,
+    autoRenew: info.EnableAutoRenew === true,
+    period: info.Period || '',
+  };
+}
+
+/**
+ * 官方询价（EstimateSubscribeNewOrderPrice）：按套餐+档位拿实时月价与挂牌价。
+ */
+async function estimateOrderPrice(p, timeoutMs, resourceType, bizInfo, resourceName = '') {
+  const region = p.region || 'cn-beijing';
+  const url = `https://console.volcengine.com/api/top/ark/${region}/2024-01-01/EstimateSubscribeNewOrderPrice?`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json, text/plain, */*',
+      'content-type': 'application/json',
+      cookie: p.sessionCookie,
+      origin: 'https://console.volcengine.com',
+      referer: `https://console.volcengine.com/ark/region:${region}/subscription/coding-plan?tab=usage`,
+      'x-csrf-token': p.csrfToken || '',
+      'x-web-id': p.webId || '',
+    },
+    body: JSON.stringify({
+      Items: [{ ResourceType: resourceType, ResourceName: resourceName, BizInfo: bizInfo, Quantity: 1, Period: 'monthly' }],
+      Times: 1,
+    }),
+    signal: AbortSignal.timeout(timeoutMs || 15000),
+  });
+  const json = await res.json().catch(() => null);
+  const err = json && json.ResponseMetadata && json.ResponseMetadata.Error;
+  if (err) throw new Error(`[${err.Code}] ${err.Message || ''}`);
+  const one = ((json && json.Result && json.Result.Results) || [])[0];
+  if (!one) return null;
+  return { amount: toNum(one.TotalAmount), original: toNum(one.OriginalAmount) };
 }
 
 /** 读取 ~/.arkcli/config.yaml 中默认 profile 的套餐元信息（仅读文件补充，不依赖 CLI） */

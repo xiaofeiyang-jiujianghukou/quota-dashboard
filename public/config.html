@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>供应商配置 · AI 套餐看板</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --panel2: #1c2330; --border: #2d333b;
+    --text: #e6edf3; --muted: #8b949e; --blue: #58a6ff; --green: #3fb950;
+    --amber: #d29922; --red: #f85149;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.6 -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; display: flex; min-height: 100vh; }
+
+  /* ---- 左侧导航 ---- */
+  .sidebar { width: 200px; flex: none; background: var(--panel); border-right: 1px solid var(--border); padding: 20px 12px; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
+  .sidebar .logo { font-weight: 700; font-size: 15px; line-height: 22px; padding: 0 10px 16px; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+  .sidebar .logo .logo-txt { white-space: nowrap; }
+  .sidebar .logo .dot { color: var(--blue); }
+  .sidebar a { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 8px; color: var(--muted); text-decoration: none; font-size: 13.5px; line-height: 22px; white-space: nowrap; }
+  .sidebar a:hover { color: var(--text); background: var(--panel2); }
+  .sidebar a.active { color: var(--text); background: var(--panel2); border-left: 2px solid var(--blue); }
+  .sidebar .foot { margin-top: auto; font-size: 11px; color: var(--muted); padding: 0 10px; line-height: 1.8; }
+
+  /* ---- 主区 ---- */
+  .main { flex: 1; padding: 24px 28px 80px; max-width: 1100px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; flex-wrap: wrap; }
+  h1 { font-size: 20px; word-break: keep-all; }
+  .sub { color: var(--muted); font-size: 12.5px; margin-bottom: 16px; }
+  .btn { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; font-size: 12.5px; cursor: pointer; }
+  .btn:hover { border-color: var(--blue); color: var(--blue); }
+  .btn.primary { background: rgba(88,166,255,.12); border-color: var(--blue); color: var(--blue); }
+  .btn.danger { color: var(--red); }
+  .btn.danger:hover { border-color: var(--red); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+  /* ---- 列表 ---- */
+  .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .toolbar .count { color: var(--muted); font-size: 12.5px; margin-left: auto; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; background: var(--panel2); white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  tr.row-disabled td { opacity: .55; }
+  tr.plan-cont td { border-top: none; }          /* 同一供应商的多行连成一体 */
+  td.plan-cell { padding-top: 8px; padding-bottom: 8px; }
+  td.plan-cell .plan-exp { font-size: 11.5px; color: var(--muted); margin-left: 6px; }
+  td[rowspan] { border-bottom: 1px solid var(--border); }
+  .pname { font-weight: 600; }
+  .pid { color: var(--muted); font-size: 11px; }
+  .plan-row { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; margin: 1px 0; }
+  .plan-exp { font-size: 11.5px; color: var(--muted); }
+  .badge.plan-name { color: var(--blue); border-color: rgba(88,166,255,.5); }
+  .badge.plan-kind { color: var(--muted); }
+  .badge { font-size: 11px; padding: 2px 9px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+  .badge.active { color: var(--green); border-color: rgba(63,185,80,.5); }
+  .badge.disabled { color: var(--muted); border-color: var(--border); }
+  .badge.expired { color: var(--red); border-color: rgba(248,81,73,.5); }
+  .badge.unconfigured { color: var(--amber); border-color: rgba(210,153,34,.5); }
+  .badge.login-ok { color: var(--green); border-color: rgba(63,185,80,.5); }
+  .badge.login-warn { color: var(--amber); border-color: rgba(210,153,34,.5); }
+  .muted { color: var(--muted); font-size: 12px; }
+  .row-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+  .row-actions .btn { padding: 4px 10px; font-size: 12px; }
+
+  /* ---- 分页 ---- */
+  .pager { display: flex; align-items: center; gap: 8px; justify-content: flex-end; margin-top: 12px; font-size: 12.5px; color: var(--muted); }
+  .pager button { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+  .pager button:disabled { opacity: .4; cursor: not-allowed; }
+  .pager button.cur { border-color: var(--blue); color: var(--blue); }
+  select.pagesize { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; font-size: 12px; }
+
+  /* ---- 弹窗（新增 / 编辑） ---- */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.62); display: flex; align-items: center; justify-content: center; z-index: 50; }
+  .modal.hidden { display: none; }
+  .modal-box { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px 24px; width: min(560px, 94vw); max-height: 88vh; overflow: auto; }
+  .modal-box h3 { margin-bottom: 12px; font-size: 15px; }
+  .frow { display: grid; grid-template-columns: 150px 1fr; gap: 8px; align-items: center; margin-bottom: 9px; }
+  .frow label { font-size: 12.5px; }
+  .frow label em { font-style: normal; color: var(--muted); display: block; font-size: 11px; }
+  .frow label em.ok { color: var(--green); }
+  .frow input, .frow select { background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 6px 8px; font-size: 12.5px; width: 100%; }
+  .frow input:focus, .frow select:focus { outline: none; border-color: var(--blue); }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+  /* 授权状态面板 + 全局提示条 */
+  #toasts { position: fixed; top: 16px; right: 16px; z-index: 99; display: flex; flex-direction: column; gap: 10px; max-width: 420px; }
+  .toast { background: var(--panel); border: 1px solid var(--border); border-left-width: 4px; border-radius: 10px; padding: 12px 14px; font-size: 13px; line-height: 1.7; box-shadow: 0 8px 28px rgba(0,0,0,.45); animation: toastIn .22s ease-out; }
+  .toast.fade { opacity: 0; transition: opacity .4s; }
+  .toast.ok { border-left-color: var(--green); }
+  .toast.bad { border-left-color: var(--red); }
+  .toast.warn { border-left-color: var(--amber); }
+  .toast.info { border-left-color: var(--blue); }
+  .toast .muted { color: var(--muted); font-size: 12px; }
+  @keyframes toastIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
+  .modal-box.wide { max-width: 800px; }
+  .auth-simple { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 2px; }
+  .btn.big { padding: 12px 18px; font-size: 14.5px; font-weight: 600; }
+  .auth-simple .msg { min-height: 18px; }
+  .auth-status { display: flex; align-items: center; gap: 8px; font-size: 12.5px; margin-bottom: 10px; }
+  .note { font-size: 12px; color: var(--muted); background: var(--panel2); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; line-height: 1.7; }
+  .msg { font-size: 12.5px; color: var(--amber); min-height: 18px; margin-top: 6px; }
+  .empty { color: var(--muted); text-align: center; padding: 40px 0; }
+  .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: sp 1s linear infinite; vertical-align: -2px; margin-right: 6px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  @media (max-width: 860px) { .sidebar { width: 56px; } .sidebar a span.txt, .sidebar .logo .logo-txt, .sidebar .foot { display: none; }
+    .sidebar a { justify-content: center; padding: 9px 0; overflow: hidden; } .main { padding: 18px 12px 60px; } }
+</style>
+</head>
+<body>
+  <nav class="sidebar">
+    <div class="logo"><span class="dot">●</span> <span class="logo-txt">套餐看板</span></div>
+    <a href="/" id="nav-dashboard">📊 <span class="txt">Dashboard</span></a>
+    <a href="/config" id="nav-config" class="active">⚙️ <span class="txt">供应商配置</span></a>
+    <div class="foot">密钥/凭据仅存本机<br/>data/dashboard.db</div>
+  </nav>
+
+  <div class="main">
+    <header>
+      <h1>⚙️ 供应商配置</h1>
+      <button class="btn primary" id="addBtn">＋ 新增供应商</button>
+    </header>
+    <div class="sub">
+      两种失效途径：① <b>禁用</b>（主动，立即从看板移除）；② <b>被动失效</b>（授权有效期由平台接口拉取后自动落库，到期自动判失效）。
+      只有「有效」的供应商才会出现在 Dashboard。
+    </div>
+
+    <div class="toolbar">
+      <span class="muted">每页</span>
+      <select class="pagesize" id="pageSize">
+        <option value="10" selected>10</option>
+        <option value="20">20</option>
+        <option value="50">50</option>
+      </select>
+      <span class="muted">条</span>
+      <span class="count" id="count"></span>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="width:15%">名称</th>
+          <th style="width:8%">类型</th>
+          <th style="width:9%">状态</th>
+          <th style="width:11%">授权状态</th>
+          <th style="width:20%">套餐</th>
+          <th style="width:15%">价格</th>
+          <th style="width:14%">有效期</th>
+          <th style="text-align:right">操作</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"><tr><td colspan="8" class="empty"><span class="spin"></span>加载中…</td></tr></tbody>
+    </table>
+    <div class="pager" id="pager"></div>
+  </div>
+
+  <!-- 新增弹窗 -->
+  <div class="modal hidden" id="addModal">
+    <div class="modal-box">
+      <h3>＋ 新增供应商</h3>
+      <div class="frow">
+        <label>类型</label>
+        <select id="addType"></select>
+      </div>
+      <div class="frow">
+        <label>显示名称 <em>留空用默认名；同平台多账号建议加后缀</em></label>
+        <input id="addName" placeholder="如：方舟-工作号" />
+      </div>
+      <div class="note" id="addNote"></div>
+      <div class="modal-actions">
+        <button class="btn" id="addCancel">取消</button>
+        <button class="btn primary" id="addOk">创建并编辑凭据</button>
+      </div>
+      <div class="msg" id="addMsg"></div>
+    </div>
+  </div>
+
+  <!-- 授权弹窗：唯一方式「授权登录」——开新窗口打开官网，已登录直接成功，未登录登录后自动成功 -->
+  <div class="modal hidden" id="editModal">
+    <div class="modal-box">
+      <h3 id="editTitle">授权登录</h3>
+      <div class="auth-status" id="editStatus"></div>
+      <div class="auth-simple">
+        <button class="btn primary big" id="authGo">🔐 授权登录</button>
+        <div class="msg" id="authMsg">点击后会在新窗口打开官网：已登录则自动授权成功；未登录则登录后自动完成。</div>
+      </div>
+      <div class="modal-actions"><button class="btn" id="editCancel">关闭</button></div>
+    </div>
+  </div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let data = null;        // /api/providers
+let page = 1;           // 当前页（1 起）
+let pageSize = 10;      // 默认 10 条/页
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+const STATUS_TEXT = { active: '有效', disabled: '已停用', expired: '已过期', unconfigured: '未配置' };
+const STATUS_CLS = { active: 'active', disabled: 'disabled', expired: 'expired', unconfigured: 'unconfigured' };
+
+function fmtDate(v) {
+  if (!v) return '—';
+  const s = String(v);
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : s.slice(0, 10);
+}
+
+async function load() {
+  try {
+    data = await (await fetch('/api/providers')).json();
+  } catch {
+    data = null;
+  }
+  const total = data ? data.providers.length : 0;
+  const maxPage = Math.max(1, Math.ceil(total / pageSize));
+  if (page > maxPage) page = maxPage;
+  render();
+}
+
+function render() {
+  const tbody = $('tbody');
+  if (!data) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty">加载失败，请刷新重试</td></tr>';
+    return;
+  }
+  const list = data.providers;
+  $('count').textContent = `共 ${list.length} 个供应商实例`;
+  const slice = list.slice((page - 1) * pageSize, page * pageSize);
+  if (!slice.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty">暂无供应商，点右上角「＋ 新增供应商」</td></tr>';
+  } else {
+    tbody.innerHTML = slice.map((pv) => {
+      const lc = pv.lifecycle;
+      const login = authBadgeHtml(pv);
+      const planRows = planLinesOf(pv);          // [{plan, expiry}] 一个套餐一行
+      const span = planRows.length;
+      const rowCls = lc.status === 'disabled' ? 'row-disabled' : '';
+      const id = escapeHtml(pv.id);
+      // 第一行：左侧信息 + 操作 用 rowspan 合并为一个单元格；右侧套餐列只放第一个套餐
+      let html = `
+      <tr class="${rowCls}" data-id="${id}">
+        <td rowspan="${span}"><div class="pname">${escapeHtml(pv.name)}</div><div class="pid">${id}</div></td>
+        <td rowspan="${span}">${escapeHtml(pv.type)}</td>
+        <td rowspan="${span}"><span class="badge ${STATUS_CLS[lc.status]}">${STATUS_TEXT[lc.status]}</span></td>
+        <td rowspan="${span}">${login}</td>
+        <td class="plan-cell">${planRows[0].plan}</td>
+        <td class="plan-cell">${planRows[0].price}</td>
+        <td class="plan-cell">${planRows[0].expiry}</td>
+        <td rowspan="${span}">
+          <div class="row-actions">
+            <button class="btn ${pv.loggedIn ? 'danger' : ''}" data-act="edit" data-id="${id}">${pv.loggedIn ? '取消授权' : '授权'}</button>
+            <button class="btn ${lc.active ? 'danger' : 'primary'}" data-act="toggle" data-id="${id}">${lc.active ? '禁用' : '启用'}</button>
+            <button class="btn danger" data-act="del" data-id="${id}">删除</button>
+          </div>
+        </td>
+      </tr>`;
+      // 后续行：只有套餐单元格，视觉上与上一行连成一体
+      for (let i = 1; i < span; i++) {
+        html += `
+      <tr class="${rowCls} plan-cont" data-id="${id}">
+        <td class="plan-cell">${planRows[i].plan}</td>
+        <td class="plan-cell">${planRows[i].price}</td>
+        <td class="plan-cell">${planRows[i].expiry}</td>
+      </tr>`;
+      }
+      return html;
+    }).join('');
+  }
+  renderPager(list.length);
+}
+
+function renderPager(total) {
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const el = $('pager');
+  let btns = '';
+  for (let i = 1; i <= pages; i++) {
+    btns += `<button class="${i === page ? 'cur' : ''}" data-page="${i}">${i}</button>`;
+  }
+  el.innerHTML = `
+    <span>第 ${page} / ${pages} 页</span>
+    <button data-page="${Math.max(1, page - 1)}" ${page <= 1 ? 'disabled' : ''}>‹ 上一页</button>
+    ${pages > 1 ? btns : ''}
+    <button data-page="${Math.min(pages, page + 1)}" ${page >= pages ? 'disabled' : ''}>下一页 ›</button>`;
+  el.querySelectorAll('button[data-page]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const p = Number(b.dataset.page);
+      if (p >= 1 && p <= pages && p !== page) {
+        page = p;
+        render();
+      }
+    })
+  );
+}
+
+async function post(url, body) {
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  return r.json();
+}
+
+/* ---- 新增 ---- */
+function fillAddTypes() {
+  $('addType').innerHTML = (data?.types || [])
+    .map((t) => `<option value="${escapeHtml(t.type)}">${escapeHtml(t.name)}（${escapeHtml(t.type)} · ${escapeHtml(t.methodText)}）</option>`)
+    .join('');
+  onTypeChange();
+}
+function onTypeChange() {
+  const t = (data?.types || []).find((x) => x.type === $('addType').value);
+  const pv = (data?.providers || []).find((p) => p.type === $('addType').value);
+  $('addNote').textContent = t ? `凭据方式：${t.methodText}。${pv ? `创建后参照「${pv.name}」填写同类凭据。` : ''}` : '';
+}
+$('addType').addEventListener('change', onTypeChange);
+$('addBtn').addEventListener('click', () => {
+  $('addMsg').textContent = '';
+  $('addName').value = '';
+  fillAddTypes();
+  $('addModal').classList.remove('hidden');
+});
+$('addCancel').addEventListener('click', () => $('addModal').classList.add('hidden'));
+$('addOk').addEventListener('click', async () => {
+  $('addOk').disabled = true;
+  $('addMsg').textContent = '创建中…';
+  const r = await post('/api/providers/add', { type: $('addType').value, name: $('addName').value });
+  $('addOk').disabled = false;
+  if (!r.ok) {
+    $('addMsg').textContent = '❌ ' + (r.error || '创建失败');
+    return;
+  }
+  $('addModal').classList.add('hidden');
+  await load();
+  openEdit(r.id); // 创建后直接进入凭据编辑
+});
+
+/* ---- 授权登录：唯一方式（开新窗口 → 已登录直接成功 / 未登录登录后自动成功）---- */
+let editPid = null;
+let authTimer = null;
+
+function toast(kind, html, ms = 9000) {
+  const box = document.getElementById('toasts');
+  if (!box) return;
+  const el = document.createElement('div');
+  el.className = 'toast ' + kind;
+  el.innerHTML = html;
+  box.appendChild(el);
+  setTimeout(() => { el.classList.add('fade'); setTimeout(() => el.remove(), 400); }, ms);
+}
+
+function pidName(pid) {
+  return (data?.providers.find((p) => p.id === pid) || {}).name || pid;
+}
+
+function editStatusHtml(pv) {
+  const login = pv.loggedIn
+    ? '<span class="badge login-ok">已授权</span>'
+    : pv.lifecycle.configured
+      ? '<span class="badge login-warn">待验证</span>'
+      : '<span class="badge unconfigured">未授权</span>';
+  return login;
+}
+
+/** 表格「授权状态」列 */
+/** 套餐 / 价格 / 有效期 三列：返回 [{plan, price, expiry}]，一个套餐一行 */
+function planLinesOf(pv) {
+  const L = pv.lastCollect;
+  const lc = pv.lifecycle || {};
+  const DASH = '<span class="muted">--</span>';
+  if (!L) return [{ plan: '<span class="muted">待采集</span>', price: DASH, expiry: DASH }];
+
+  // 1) 有套餐：一个套餐一行 —— 套餐名 / 价格 / 各自到期
+  if (L.plans && L.plans.length) {
+    return L.plans.map((pl) => {
+      const expired = pl.expiresAt && new Date(pl.expiresAt).getTime() <= Date.now();
+      const expiry = pl.expiresAt
+        ? `${fmtDate(pl.expiresAt)}${expired ? ' <span class="badge expired">已过期</span>' : ''}`
+        : DASH;
+      return {
+        plan: `<span class="badge plan-name">${escapeHtml(pl.name)}</span>`,
+        price: pl.priceText ? escapeHtml(pl.priceText) : DASH,
+        expiry,
+      };
+    });
+  }
+
+  // 2) 已授权但没有套餐 → 三列一律 "--"（不额外标注）
+  if (L.noPlan) {
+    return [{ plan: DASH, price: DASH, expiry: DASH }];
+  }
+
+  // 3) 非套餐（余额/资源包/免费额度…）：套餐列与价格列都显示 "--"，有效期照旧
+  const expText = lc.permanent
+    ? '<span class="badge login-ok">永久</span>'
+    : lc.expiresAt
+      ? fmtDate(lc.expiresAt)
+      : L.ok
+        ? DASH
+        : DASH;
+  if (L.ok) return [{ plan: DASH, price: DASH, expiry: expText }];
+  return [{ plan: `<span class="muted" title="${escapeHtml(L.error || '')}">采集失败</span>`, price: DASH, expiry: DASH }];
+}
+
+function authBadgeHtml(pv) {
+  if (authRunning && authRunning === pv.id) return '<span class="badge login-warn">⏳ 授权中…</span>';
+  if (pv.loggedIn) return '<span class="badge login-ok">✅ 已授权</span>';
+  if (pv.lifecycle.configured) return '<span class="badge login-warn">⚠️ 待验证</span>';
+  return '<span class="badge unconfigured">未授权</span>';
+}
+let authRunning = null;
+
+function stopAuthPoll() {
+  if (authTimer) { clearInterval(authTimer); authTimer = null; }
+}
+
+async function pollAuth() {
+  if (!editPid) return;
+  let j;
+  try {
+    j = await (await fetch('/api/login/session/status?providerId=' + encodeURIComponent(editPid))).json();
+  } catch {
+    return;
+  }
+  const msg = $('authMsg');
+  if (j.state === 'idle') {
+    stopAuthPoll();
+    authRunning = null;
+    return;
+  }
+  if (j.state === 'running') {
+    if (msg) msg.textContent = '已打开官网窗口：已登录会自动完成；未登录请在该窗口登录（登录后自动完成，无需其它操作）…';
+    return;
+  }
+  if (j.state === 'ok' || j.state === 'saved') {
+    stopAuthPoll();
+    authRunning = null;
+    const ok = j.state === 'ok';
+    if (msg) msg.textContent = ok
+      ? `✅ 授权成功（已保存 ${(j.saved || []).join('、')}，采集到 ${j.verified ? j.verified.items : 0} 条数据）`
+      : `⚠️ 已保存凭据，但采集未通过：${j.error || '未知原因'}`;
+    toast(ok ? 'ok' : 'warn', ok
+      ? `✅ <b>${escapeHtml(pidName(editPid))} 授权成功</b><br/>采集验证通过（${j.verified ? j.verified.items : 0} 条数据）`
+      : `⚠️ <b>${escapeHtml(pidName(editPid))} 凭据已保存</b>，但采集未通过<br/>${escapeHtml(j.error || '')}`, 12000);
+    await load();
+    {
+      const fresh = data?.providers.find((p) => p.id === editPid);
+      if (fresh) {
+        $('editStatus').innerHTML = editStatusHtml(fresh);
+        renderAuthButton(fresh);
+      }
+    }
+    const pid = editPid;
+    setTimeout(() => { if (editPid === pid) { $('editModal').classList.add('hidden'); editPid = null; } }, 1600);
+    return;
+  }
+  if (j.state === 'fail') {
+    stopAuthPoll();
+    authRunning = null;
+    if (msg) msg.textContent = '❌ 授权失败：' + (j.error || '未知原因');
+    toast('bad', `❌ <b>${escapeHtml(pidName(editPid))} 授权失败</b><br/>${escapeHtml(j.error || '')}`, 14000);
+    load();
+  }
+}
+
+function startAuthPoll() {
+  stopAuthPoll();
+  authTimer = setInterval(pollAuth, 2000);
+  pollAuth();
+}
+
+function openEdit(pid) {
+  const pv = data?.providers.find((p) => p.id === pid);
+  if (!pv) return;
+  editPid = pid;
+  $('editTitle').textContent = `🔐 ${pv.name}（${pv.id}）· 授权`;
+  $('editStatus').innerHTML = editStatusHtml(pv);
+  renderAuthButton(pv);
+  $('editModal').classList.remove('hidden');
+}
+
+/** 按钮随授权状态切换：未授权 → 授权登录；已授权 → 取消授权 */
+function renderAuthButton(pv) {
+  const btn = $('authGo');
+  if (!btn) return;
+  const authorized = !!(pv && pv.loggedIn);
+  btn.dataset.mode = authorized ? 'revoke' : 'auth';
+  btn.classList.toggle('danger', authorized);
+  btn.classList.toggle('primary', !authorized);
+  btn.textContent = authorized ? '🗑 取消授权' : '🔐 授权登录';
+  $('authMsg').textContent = authorized
+    ? '当前已授权。点「取消授权」会清空这个实例的凭据，并退出它自己的浏览器登录（同平台其它账号不受影响）。'
+    : '点击下面按钮：会在新窗口打开官网。已登录则自动授权成功；未登录则登录后自动完成。';
+}
+
+$('editCancel').addEventListener('click', async () => {
+  if (authTimer) await post('/api/login/session/cancel', { providerId: editPid });
+  stopAuthPoll();
+  authRunning = null;
+  editPid = null;
+  $('editModal').classList.add('hidden');
+});
+
+/** 取消授权（弹窗按钮与表格按钮共用）：清空凭据，浏览器登录态保留 */
+async function revokeAuth(pid, opts = {}) {
+  const pv = data?.providers.find((p) => p.id === pid);
+  const name = pv ? pv.name : pid;
+  if (!opts.skipConfirm && !window.confirm(`确定取消「${name}」的授权吗？\n（清空这个实例的凭据，并退出它自己的浏览器登录；同平台的其它账号实例不受影响，下次授权需重新登录）`)) return false;
+  const r = await post('/api/auth/clear', { providerId: pid });
+  if (!r.ok) {
+    toast('bad', '❌ 取消授权失败：' + escapeHtml(r.error || ''), 12000);
+    return false;
+  }
+  toast('info', `已取消「${escapeHtml(name)}」的授权（移除 ${r.removed || 0} 项凭据${r.loggedOut ? '，已退出该实例登录' : ''}）`, 9000);
+  await load();
+  const fresh = data?.providers.find((p) => p.id === pid);
+  if (fresh && editPid === pid) {
+    $('editStatus').innerHTML = editStatusHtml(fresh);
+    renderAuthButton(fresh);
+    $('authMsg').textContent = '已取消授权。需要时点「授权登录」重新授权。';
+  }
+  return true;
+}
+
+// 弹窗按钮：授权登录 / 取消授权（按当前状态切换）
+$('authGo').addEventListener('click', async () => {
+  if (!editPid) return;
+  const b = $('authGo');
+  const pid = editPid;
+
+  if (b.dataset.mode === 'revoke') {
+    b.disabled = true;
+    b.textContent = '正在取消…';
+    await revokeAuth(pid);
+    b.disabled = false;
+    const fresh = data?.providers.find((p) => p.id === pid);
+    renderAuthButton(fresh || { loggedIn: false });
+    return;
+  }
+
+  b.disabled = true;
+  b.textContent = '正在打开官网…';
+  authRunning = editPid;
+  const r = await post('/api/login/session/start', { providerId: editPid });
+  b.disabled = false;
+  b.textContent = '🔐 授权登录';
+  if (!r.ok) {
+    authRunning = null;
+    $('authMsg').textContent = '❌ ' + (r.error || '打开官网失败');
+    toast('bad', '❌ 打开官网失败：' + escapeHtml(r.error || ''), 12000);
+    return;
+  }
+  startAuthPoll();
+  load();
+});
+
+/* ---- 行操作：编辑 / 禁用 / 删除 ---- */
+document.getElementById('tbody').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-act]');
+  if (!btn) return;
+  const pid = btn.dataset.id;
+  const pv = data.providers.find((p) => p.id === pid);
+  const act = btn.dataset.act;
+
+  if (act === 'edit') {
+    if (pv && pv.loggedIn) {
+      btn.disabled = true;
+      await revokeAuth(pid);
+      btn.disabled = false;
+      return;
+    }
+    openEdit(pid);
+    return;
+  }
+  if (act === 'toggle') {
+    const enabling = !pv.lifecycle.active;
+    if (!enabling && !confirm(`确定禁用「${pv.name}（${pid}）」？禁用后立即从看板移除，可随时再启用。`)) return;
+    btn.disabled = true;
+    const r = await post('/api/providers/settings', { providerId: pid, enabled: enabling });
+    btn.disabled = false;
+    if (!r.ok) { alert('操作失败：' + (r.error || '')); return; }
+    await load();
+    return;
+  }
+  if (act === 'del') {
+    if (!confirm(`确定删除「${pv.name}（${pid}）」？\n将连同授权凭据一并清除，且不可恢复！`)) return;
+    btn.disabled = true;
+    const r = await post('/api/providers/delete', { providerId: pid });
+    btn.disabled = false;
+    if (!r.ok) { alert('删除失败：' + (r.error || '')); return; }
+    await load();
+  }
+});
+
+$('pageSize').addEventListener('change', () => {
+  pageSize = Number($('pageSize').value);
+  page = 1;
+  render();
+});
+
+load();
+
+</script>
+<div id="toasts"></div>
+</body>
+</html>

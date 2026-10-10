@@ -9,7 +9,10 @@
   },
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && for f in lib/*.js providers/*.js; do node --check \"$f\" || exit 1; done"
+    "check": "node --check server.js && for f in lib/*.js providers/*.js; do node --check \"$f\" || exit 1; done",
+    "restart": "./run.sh restart",
+    "stop": "./run.sh stop",
+    "status": "./run.sh status"
   },
   "dependencies": {
     "playwright": "^1.47.0"

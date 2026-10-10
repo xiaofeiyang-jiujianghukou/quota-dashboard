@@ -17,8 +17,8 @@ const MODEL_PRICES = [
 ];
 const PRICING_AS_OF = '2026-09-05';
 
-export async function collect(cfg) {
-  const p = cfg.providers.deepseek;
+export async function collect(cfg, pid = id) {
+  const p = cfg.providers[pid];
   if (!p.enabled) return { ok: false, skipped: true, items: [] };
 
   if (!p.apiKey) {

@@ -26,14 +26,29 @@
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
     min-height: 100vh;
+    display: flex;
   }
-  .wrap { max-width: 1280px; margin: 0 auto; padding: 24px 20px 60px; }
+  /* ---- 左侧导航（与 /config 配置页一致）---- */
+  .sidebar { width: 200px; flex: none; background: var(--panel); border-right: 1px solid var(--border); padding: 20px 12px; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
+  .sidebar .logo { font-weight: 700; font-size: 15px; line-height: 22px; padding: 0 10px 16px; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+  .sidebar .logo .logo-txt { white-space: nowrap; }
+  .sidebar .logo .dot { color: var(--blue); }
+  .sidebar a { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 8px; color: var(--muted); text-decoration: none; font-size: 13.5px; line-height: 22px; white-space: nowrap; }
+  .sidebar a:hover { color: var(--text); background: var(--panel2); }
+  .sidebar a.active { color: var(--text); background: var(--panel2); border-left: 2px solid var(--blue); }
+  .sidebar .foot { margin-top: auto; font-size: 11px; color: var(--muted); padding: 0 10px; line-height: 1.8; }
+  .wrap { flex: 1; max-width: 1280px; margin: 0 auto; padding: 24px 20px 60px; }
+  @media (max-width: 860px) {
+    .sidebar { width: 56px; }
+    .sidebar a span.txt, .sidebar .logo .logo-txt, .sidebar .foot { display: none; }
+    .sidebar a { justify-content: center; padding: 9px 0; overflow: hidden; }
+  }
 
   header {
     display: flex; flex-wrap: wrap; align-items: center; gap: 14px;
     margin-bottom: 20px;
   }
-  h1 { font-size: 22px; font-weight: 700; letter-spacing: .5px; }
+  h1 { font-size: 22px; font-weight: 700; letter-spacing: .5px; word-break: keep-all; }
   h1 .dot { color: var(--blue); }
   .sub { color: var(--muted); font-size: 13px; }
 
@@ -44,6 +59,8 @@
   }
   .controls button:hover { border-color: var(--blue); }
   .controls button:disabled { opacity: .5; cursor: not-allowed; }
+  .cfg-link { text-decoration: none; color: var(--text); }
+  .cfg-link:hover { color: var(--blue); }
   .countdown { color: var(--muted); font-size: 13px; min-width: 150px; text-align: right; }
 
   /* 状态条 */
@@ -79,17 +96,22 @@
   }
   /* 兜底：卡片内所有文字一律允许任意断行，杜绝长文本把内容挤出右缘 */
   .card, .card * { box-sizing: border-box; overflow-wrap: anywhere; word-break: break-word; }
+  .card-plan-sub { font-weight: 500; font-size: 12px; color: var(--muted); }
+  .plan-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 9px 14px 3px; font-size: 12.5px; color: var(--text); }
+  .plan-group .pg-name { font-weight: 600; }
+  .plan-group .pg-price { color: var(--muted); font-size: 11.5px; }
+  .plan-group .chip2 { margin-left: auto; }
   .card-head {
     display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap;
     padding: 12px 14px; border-bottom: 1px solid var(--border);
   }
-  .logo {
+  .card-head .logo {
     width: 12px; height: 12px; border-radius: 50%; flex: none;
     box-shadow: 0 0 8px currentColor;
   }
   .card-head .name { font-weight: 700; font-size: 14.5px; }
   .card-head .badge { margin-left: 2px; }
-  .card-head .head-expiry { flex-basis: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 2px; }
+  .card-head .head-expiry { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 2px; }
   .card-head .head-expiry .plan-chip { color: var(--blue); border-color: rgba(88,166,255,.5); }
   .badge {
     font-size: 11.5px; padding: 2px 9px; border-radius: 999px; border: 1px solid;
@@ -168,7 +190,15 @@
   }
   .more-btn:hover { color: var(--text); border-color: var(--blue); }
   /* 主力 / 备用 分栏 tab */
-  .tabs { display: flex; gap: 8px; margin: 14px 0 10px; }
+  .tabsrow { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin: 12px 0 10px; flex-wrap: wrap; }
+  .tabs { display: flex; gap: 8px; }
+  .pager { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+  .pager button { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 5px 11px; font-size: 13px; cursor: pointer; line-height: 1; }
+  .pager button:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
+  .pager button:disabled { opacity: .4; cursor: not-allowed; }
+  .pager .dots { display: flex; gap: 5px; margin: 0 4px; }
+  .pager .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); cursor: pointer; }
+  .pager .dot.on { background: var(--blue); }
   .tab-btn {
     background: var(--panel2); color: var(--muted); border: 1px solid var(--border);
     border-radius: 8px; padding: 7px 16px; font-size: 13px; cursor: pointer;
@@ -235,11 +265,17 @@
 </style>
 </head>
 <body>
+<nav class="sidebar">
+  <div class="logo"><span class="dot">●</span> <span class="logo-txt">套餐看板</span></div>
+  <a href="/" class="active">📊 <span class="txt">Dashboard</span></a>
+  <a href="/config">⚙️ <span class="txt">供应商配置</span></a>
+  <div class="foot">密钥/凭据仅存本机<br/>data/dashboard.db</div>
+</nav>
 <div class="wrap">
   <header>
     <div>
       <h1><span class="dot">●</span> AI 套餐余量看板</h1>
-      <div class="sub">百炼 · 方舟 · 智谱 · MiniMax · 混元 — 实时余量 & 到期时间</div>
+      <div class="sub">方舟 · 智谱 · MiniMax · DeepSeek — 实时余量 & 到期时间</div>
     </div>
     <div class="controls">
       <span class="countdown" id="countdown"></span>
@@ -257,7 +293,9 @@
     </div>
   </header>
 
-  <div class="tabs" id="tabs"></div>
+  <div class="tabsrow">
+    <div class="pager hidden" id="pager"></div>
+  </div>
   <div class="statusbar" id="statusbar"></div>
   <div class="grid" id="grid"></div>
 
@@ -284,21 +322,7 @@
       </div>
     </div>
   </div>
-  <!-- 供应商鉴权弹窗（点卡片 🔐 只打开该供应商自己的面板） -->
-  <div id="authModal" class="modal hidden">
-    <div class="modal-box auth-box">
-      <h3 id="authTitle">🔐 供应商鉴权</h3>
-      <div class="state" id="authState">加载中…</div>
-      <div id="authGoRow" class="auth-go hidden">
-        <button id="authGoBtn" class="primary">去官网授权</button>
-        <button id="authSyncBtn">我已授权 · 保存会话</button>
-      </div>
-      <div class="auth-tip" id="authTip">在对应官网登录授权后，点「我已授权 · 保存会话」自动读取本机浏览器会话并保存（🍪 Cookie 会过期，失效时重新授权即可）；也可手动粘贴下面的字段，保存后立即生效。</div>
-      <div id="authList"></div>
-      <div class="wecom-msg" id="authMsg"></div>
-      <div class="modal-actions"><button id="authCloseBtn">关闭</button></div>
-    </div>
-  </div>
+  <!-- 供应商鉴权已迁移至独立配置页 /config（配置与面板分离） -->
   <footer id="footer"></footer>
 </div>
 
@@ -363,10 +387,8 @@ function providerColor(id) {
   return {
     ark: '#e25555',       // 火山红
     ark2: '#ff8f7a',      // 火山红（第二账号，浅一档）
-    bailian: '#ff7a45',   // 阿里橙
     zhipu: '#8b5cf6',     // 智谱紫
     minimax: '#2ecc71',   // 绿
-    tencent: '#5b8def',   // 腾讯蓝
     deepseek: '#536dfe',  // DeepSeek 蓝
   }[id] || '#58a6ff';
 }
@@ -497,21 +519,31 @@ async function refreshAuthInfo() {
 }
 
 function computeMonthlyTotal(state) {
-  // 每月订阅总金额：按平台去重求和（同一套餐多个条目只计一次），不含充值（DeepSeek 无 price）
-  const byProvider = {};
-  const names = {};
+  // 每月订阅合计：按"套餐"逐个计入（同一供应商可能有多个套餐），
+  // 并按计费周期折算成月（季付 ÷3、年付 ÷12），不含充值余额。
+  const parts = [];
+  const seen = new Set();
   for (const pv of state.providers) {
-    if (!pv.items) continue;
-    for (const it of pv.items) {
-      if (typeof it.price === 'number' && it.price > 0) {
-        byProvider[pv.id] = it.price;
-        names[pv.id] = pv.name;
-      }
+    for (const it of pv.items || []) {
+      if (typeof it.price !== 'number' || it.price <= 0) continue;
+      const key = `${pv.id}|${it.planName || it.key || ''}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const months = it.pricePeriod === 'quarterly' ? 3 : it.pricePeriod === 'yearly' ? 12 : 1;
+      parts.push({
+        label: `${pv.name}${it.planName ? ' ' + it.planName : ''}`,
+        monthly: it.price / months,
+        raw: it.priceText || `¥${it.price}`,
+        months,
+      });
     }
   }
-  const total = Object.values(byProvider).reduce((s, v) => s + v, 0);
-  const breakdown = Object.entries(byProvider).map(([id, v]) => `${names[id]} ¥${v}`).join(' + ');
-  return { total, title: breakdown ? `${breakdown} = ¥${total}/月（不含充值）` : '暂无订阅价格数据' };
+  const total = Math.round(parts.reduce((s, p) => s + p.monthly, 0) * 100) / 100;
+  const title = parts.length
+    ? parts.map((p) => `${p.label} ${p.months === 1 ? `¥${p.monthly}/月` : `${p.raw} ≈ ¥${p.monthly.toFixed(1)}/月`}`).join(' + ') +
+      ` = ¥${total}/月（不含充值）`
+    : '暂无订阅价格数据';
+  return { total, title };
 }
 
 function render() {
@@ -529,12 +561,20 @@ function render() {
   const bad = state.providers.filter((p) => !p.ok && !p.skipped && !p.items.length).length;
   const off = state.providers.filter((p) => p.skipped).length;
   let chips = `<span class="chip">采集耗时 <b>${state.elapsedMs}ms</b> · 更新于 <b>${isoShort(state.fetchedAt)}</b></span>`;
-  if (statusInfo && statusInfo.providers) {
-    for (const [pid, st] of Object.entries(statusInfo.providers)) {
-      // 所有提供商统一：启用且已配置（密钥/AK-SK）才标记"已配置"
-      const okFlag = st.enabled && !!st.configured;
-      chips += `<span class="chip ${okFlag ? 'ok' : 'warn'}">${escapeHtml(providerName(pid))} <b>${okFlag ? '已配置' : '待配置密钥'}</b></span>`;
+  if (statusInfo && statusInfo.lifecycle) {
+    // 配置/面板分离：面板只显示"有效"供应商，停用/过期/未配置的只在配置页管理
+    const map = {
+      active: ['ok', '有效'],
+      disabled: ['', '已停用'],
+      expired: ['bad', '已过期'],
+      unconfigured: ['warn', '未配置'],
+    };
+    for (const [pid, lc] of Object.entries(statusInfo.lifecycle)) {
+      const [cls, txt] = map[lc.status] || ['', lc.status];
+      chips += `<span class="chip ${cls}">${escapeHtml(providerName(pid))} <b>${txt}</b></span>`;
     }
+    const nActive = Object.values(statusInfo.lifecycle).filter((l) => l.status === 'active').length;
+    chips += `<span class="chip ok">有效供应商 <b>${nActive}</b> / ${Object.keys(statusInfo.lifecycle).length}</span>`;
   } else {
     chips += `<span class="chip ok">正常 <b>${ok}</b></span><span class="chip warn">部分 <b>${partial}</b></span><span class="chip bad">失败 <b>${bad}</b></span><span class="chip">未启用 <b>${off}</b></span>`;
   }
@@ -555,45 +595,113 @@ function render() {
     sb.innerHTML = chips;
   }
 
-  // 卡片（按当前 tab 过滤：主力 / 备用）
+  // 卡片：所有供应商统一展示（不再分主力/备用，改为一页 3 张 + 翻页）
   grid.innerHTML = '';
-  const inTab = (id) => (activeTab === 'main' ? MAIN_TAB_IDS.includes(id) : !MAIN_TAB_IDS.includes(id));
-  const allCards = state.providers.filter((p) => !p.skipped || p.items.length);
-  const cards = allCards.filter((p) => inTab(p.id));
-  renderTabs(allCards);
+  const cards = state.providers.filter((p) => !p.skipped || p.items.length);
   if (cards.length === 0) {
-    grid.innerHTML = `<div class="empty">该分栏下暂无提供商</div>`;
+    grid.innerHTML = `<div class="empty">暂无供应商</div>`;
+    renderPager(0, 1);
     return;
   }
+  // 卡片分页：每页 CARDS_PER_PAGE 个，左右箭头 / 圆点翻页
+  const totalPages = Math.max(1, Math.ceil(cards.length / CARDS_PER_PAGE));
+  if (cardPage > totalPages) cardPage = totalPages;
+  if (cardPage < 1) cardPage = 1;
+  // 按套餐拆卡：一个供应商有多个套餐就出多张卡（每张卡只装该套餐的额度窗口）
+  const units = [];
   for (const pv of cards) {
+    const names = [...new Set((pv.items || []).map((it) => it.planName).filter(Boolean))];
+    if (names.length > 1) {
+      for (const nm of names) units.push({ pv, planName: nm });
+    } else {
+      units.push({ pv, planName: names[0] || null });
+    }
+  }
+  const totalUnits = units.length;
+  const totalUnitPages = Math.max(1, Math.ceil(totalUnits / CARDS_PER_PAGE));
+  if (cardPage > totalUnitPages) cardPage = totalUnitPages;
+  const pageUnits = units.slice((cardPage - 1) * CARDS_PER_PAGE, cardPage * CARDS_PER_PAGE);
+  renderPager(totalUnits, totalUnitPages);
+  for (const unit of pageUnits) {
+    const pv = unit.planName ? { ...unit.pv, items: (unit.pv.items || []).filter((it) => it.planName === unit.planName) } : unit.pv;
+    const onlyPlan = unit.planName;
     const b = badgeFor(pv);
     const card = document.createElement('div');
     card.className = 'card';
     const accent = providerColor(pv.id);
     // 套餐信息（档位+价格）与到期时间：均为卡片级，公共信息只显示一次
     const cardPlanItem = (pv.items || []).find((it) => it.planName || it.priceText || it.quotaText);
-    // 套餐信息分两行：第 1 行 档位·价格；第 2 行 额度水平
-    const cardPlanLine = cardPlanItem && (cardPlanItem.planName || cardPlanItem.priceText)
-      ? [cardPlanItem.planName, cardPlanItem.priceText].filter(Boolean).join(' · ')
-      : '';
+    // 每个套餐独立展示（多个套餐就多个芯片），各自带自己的价格与到期
+    const planMap = new Map();
+    for (const it of pv.items || []) {
+      if (!it.planName) continue;
+      const cur = planMap.get(it.planName) || { name: it.planName, priceText: '', expiresAt: null };
+      if (!cur.priceText && it.priceText) cur.priceText = it.priceText;
+      if (it.expiresAt && (!cur.expiresAt || it.expiresAt < cur.expiresAt)) cur.expiresAt = it.expiresAt;
+      planMap.set(it.planName, cur);
+    }
+    const plans = [...planMap.values()];
+    let planChips = '';
+    for (const pl of plans) {
+      planChips += `<span class="chip2 plan-chip">📦 ${escapeHtml(pl.name)}${pl.priceText ? ' · ' + escapeHtml(pl.priceText) : ''}</span>`;
+      if (pl.expiresAt) planChips += `<span class="chip2" data-count="expire|${pl.expiresAt}|${escapeHtml(pl.name)} 到期"></span>`;
+    }
+    // 没有套餐名时，显示这家的"类型"（余额型 / 资源包 / 免费额度 / 额度池 …）
+    let kindSet = [...new Set((pv.items || []).map((it) => it.kind).filter(Boolean))];
+    if (kindSet.length > 1) kindSet = kindSet.filter((k) => k !== 'info');
+    const typeLine = plans.length ? '' : kindSet.map((k) => kindLabel(k) || k).join(' / ');
     const cardQuotaLine = cardPlanItem && cardPlanItem.quotaText ? cardPlanItem.quotaText : '';
     const cardExpiryItem = (pv.items || []).find((it) => it.expiresAt);
+    const permanent = pv.ok && !cardExpiryItem && !!(statusInfo && statusInfo.lifecycle && statusInfo.lifecycle[pv.id] && statusInfo.lifecycle[pv.id].permanent);
+    const grouped = false; // 已在分页前按套餐拆成多张卡片，这里不再组内分组
+    // 头部芯片：本卡的套餐（拆卡后只会有一个）+ 非套餐的类型 + 额度水平 + 到期
     const headChips =
-      (cardPlanLine ? `<span class="chip2 plan-chip">📦 ${escapeHtml(cardPlanLine)}</span>` : '') +
+      planChips +
+      (typeLine ? `<span class="chip2 plan-chip">🧾 类型：${escapeHtml(typeLine)}</span>` : '') +
       (cardQuotaLine ? `<span class="chip2 plan-chip">额度：${escapeHtml(cardQuotaLine)}</span>` : '') +
-      (cardExpiryItem
-        ? `<span class="chip2" data-count="expire|${cardExpiryItem.expiresAt}|到期">到期: <b>${isoShort(cardExpiryItem.expiresAt)}</b></span>`
-        : '');
+      (plans.length
+        ? ''
+        : cardExpiryItem
+          ? `<span class="chip2" data-count="expire|${cardExpiryItem.expiresAt}|到期"></span>`
+          : permanent
+            ? '<span class="chip2">到期: <b>永久</b></span>'
+            : '');
     let errHtml = '';
-    if (!pv.ok) {
+    if (!pv.ok && pv.noPlan) {
+      // 已授权、只是这个账号没有套餐：用中性信息条，别当成故障
+      errHtml = `<div class="items"><div class="item item-top" style="color:var(--muted);font-size:12.5px">
+        ✅ 已授权 · 该账号暂无生效套餐${pv.detail ? `<br/><span style="opacity:.75">${escapeHtml(pv.detail)}</span>` : ''}</div></div>`;
+    } else if (!pv.ok) {
       errHtml = `<div class="errbox"><div class="err-title">${escapeHtml(pv.error || '采集失败')}</div>${pv.detail ? `<div class="err-detail">${escapeHtml(pv.detail)}</div>` : ''}</div>`;
     }
     let itemsHtml = '';
-    if (pv.items.length) {
+    if (pv.items.length && grouped) {
+      // 多套餐：一个套餐一个分组块（标题带套餐名/价格/该套餐自己的到期倒计时），组内是该套餐的额度窗口
+      itemsHtml = groups
+        .map((g) => {
+          const head = `<div class="plan-group">
+            <span class="pg-name">📦 ${escapeHtml(g.name)}</span>
+            ${g.priceText ? `<span class="pg-price">${escapeHtml(g.priceText)}</span>` : ''}
+            ${g.expiresAt ? `<span class="chip2" data-count="expire|${g.expiresAt}|${escapeHtml(g.name)} 到期"></span>` : ''}
+          </div>`;
+          const body = g.items
+            .map((it) => {
+              // 去掉条目标题里重复的套餐前缀（分组标题已经写明了）
+              const title = String(it.title || '').replace(/^[^·]{0,28}·\s*/, '');
+              return renderItem({ ...it, title }, accent).outerHTML;
+            })
+            .join('');
+          return head + `<div class="items">${body}</div>`;
+        })
+        .join('');
+    } else if (pv.items.length) {
       // DeepSeek 卡片始终全展开（条目多且都是消费明细，不折叠）
       const alwaysOpen = pv.id === 'deepseek';
       const all = alwaysOpen || expanded.has(pv.id);
-      const visible = all ? pv.items : pv.items.slice(0, COLLAPSE_AT);
+      const visible = (all ? pv.items : pv.items.slice(0, COLLAPSE_AT)).map((it) => ({
+        ...it,
+        title: onlyPlan ? String(it.title || '').replace(/^[^·]{0,28}·\s*/, '') : it.title,
+      }));
       const hidden = pv.items.length - visible.length;
       itemsHtml = `<div class="items">${visible.map((it) => renderItem(it, accent).outerHTML).join('')}</div>`;
       if (!alwaysOpen && hidden > 0) {
@@ -607,7 +715,7 @@ function render() {
     card.innerHTML = `
       <div class="card-head">
         <span class="logo" style="color:${accent};background:${accent}"></span>
-        <span class="name">${escapeHtml(pv.name)}</span>
+        <span class="name">${escapeHtml(pv.name)}${onlyPlan ? ` <span class="card-plan-sub">· ${escapeHtml(onlyPlan)}</span>` : ''}</span>
         <button class="auth-btn ${loginStateOf(pv.id) ? 'ok' : 'warn'}" data-pid="${escapeHtml(pv.id)}" title="登录 / 鉴权">🔐 ${loginStateOf(pv.id) ? '已登录' : '未登录'}</button>
         <span class="badge ${b.cls}">${b.txt}</span>
         ${headChips ? `<span class="head-expiry">${headChips}</span>` : ''}
@@ -621,27 +729,41 @@ function render() {
 }
 
 function providerName(pid) {
-  return { ark: '方舟', ark2: '方舟②', bailian: '百炼', zhipu: '智谱', minimax: 'MiniMax', tencent: '混元', deepseek: 'DeepSeek' }[pid] || pid;
+  return { ark: '方舟', ark2: '方舟②', zhipu: '智谱', minimax: 'MiniMax', deepseek: 'DeepSeek' }[pid] || pid;
 }
 
-// ---- 分栏：主力 / 备用 ----
-const MAIN_TAB_IDS = ['ark', 'zhipu', 'deepseek'];
-let activeTab = localStorage.getItem('quotaTab') === 'backup' ? 'backup' : 'main';
+// ---- 分栏：主力 / 备用（按供应商类型，实例可动态增删）----
+const CARDS_PER_PAGE = 3;                       // 每页 3 张卡片（多套餐会拆卡）
+let cardPage = Math.max(1, Number(localStorage.getItem('quotaPage') || 1));
 
-function renderTabs(allCards) {
-  const el = $('tabs');
+/** 卡片分页控件：‹ 第 x/y 页 › + 圆点（多套餐拆卡后按卡片数分页） */
+function renderPager(total, totalPages) {
+  const el = $('pager');
   if (!el) return;
-  const cnt = (main) => allCards.filter((p) => (main ? MAIN_TAB_IDS.includes(p.id) : !MAIN_TAB_IDS.includes(p.id))).length;
+  if (total <= CARDS_PER_PAGE) {
+    el.classList.add('hidden');
+    el.innerHTML = '';
+    return;
+  }
+  el.classList.remove('hidden');
+  const dots = Array.from({ length: totalPages }, (_, i) => `<span class="dot ${i + 1 === cardPage ? 'on' : ''}" data-page="${i + 1}"></span>`).join('');
   el.innerHTML = `
-    <button class="tab-btn ${activeTab === 'main' ? 'active' : ''}" data-tab="main">主力<span class="cnt">${cnt(true)}</span></button>
-    <button class="tab-btn ${activeTab === 'backup' ? 'active' : ''}" data-tab="backup">备用<span class="cnt">${cnt(false)}</span></button>`;
-  el.querySelectorAll('.tab-btn').forEach((b) =>
-    b.addEventListener('click', () => {
-      activeTab = b.dataset.tab;
-      localStorage.setItem('quotaTab', activeTab);
-      render();
-    })
-  );
+    <button id="pagePrev" ${cardPage <= 1 ? 'disabled' : ''} title="上一页">‹</button>
+    <span>第 <b>${cardPage}</b> / ${totalPages} 页 · 共 ${total} 张卡</span>
+    <span class="dots">${dots}</span>
+    <button id="pageNext" ${cardPage >= totalPages ? 'disabled' : ''} title="下一页">›</button>`;
+  const go = (p) => {
+    const next = Math.min(Math.max(1, p), totalPages);
+    if (next === cardPage) return;
+    cardPage = next;
+    localStorage.setItem('quotaPage', String(cardPage));
+    render();
+  };
+  const prev = $('pagePrev');
+  const next = $('pageNext');
+  if (prev) prev.onclick = () => go(cardPage - 1);
+  if (next) next.onclick = () => go(cardPage + 1);
+  el.querySelectorAll('.dot').forEach((d) => { d.onclick = () => go(Number(d.dataset.page)); });
 }
 
 function tick() {
@@ -870,185 +992,32 @@ $('wecomBtn').addEventListener('click', async () => {
   await refreshWecomPanel();
 });
 
-// ---- 供应商鉴权（卡片 🔐 → 只打开该供应商自己的鉴权面板）----
-const COOKIE_LOGIN_PROVIDERS = ['ark', 'zhipu', 'minimax', 'deepseek'];
-let authCtx = { provider: null };
-
-// 去官网：新标签页打开官方页面（cookie 平台=授权页；密钥平台=获取密钥页）
-const LOGIN_URLS = {
-  ark: 'https://console.volcengine.com/ark/region:cn-beijing/subscription/coding-plan',
-  bailian: 'https://bailian.console.aliyun.com/cn-beijing?tab=plan#/efm/subscription/token-plan/personal',
-  zhipu: 'https://bigmodel.cn/coding-plan/personal/usage',
-  minimax: 'https://platform.minimaxi.com/console/usage',
-  tencent: 'https://console.cloud.tencent.com/tokenhub/tokenplan',
-  deepseek: 'https://platform.deepseek.com/usage',
-};
-
-function openAuth(pid) {
-  authCtx.provider = pid;
-  $('authModal').classList.remove('hidden');
-  $('authMsg').textContent = '';
-  renderAuth(pid);
-}
-
-// 打开鉴权（从卡片 🔐 进入，只显示该供应商）
+// ---- 供应商鉴权：已迁移至独立配置页 /config（点卡片 🔐 跳转并定位到对应供应商）----
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('.auth-btn');
   if (!btn) return;
-  openAuth(btn.dataset.pid);
-});
-$('authCloseBtn').addEventListener('click', () => {
-  $('authModal').classList.add('hidden');
-});
-
-async function renderAuth(pid) {
-  let s;
-  try {
-    s = await (await fetch('/api/auth/status')).json();
-  } catch {
-    return;
-  }
-  const pv = s && s[pid];
-  if (!pv) {
-    $('authList').innerHTML = '<div class="empty">未知供应商</div>';
-    return;
-  }
-  $('authTitle').textContent = '🔐 ' + pv.name + ' · 鉴权';
-  const cfgFields = pv.fields.filter((f) => f.configured);
-  $('authState').innerHTML = pv.loggedIn
-    ? '状态：<b style="color:var(--green)">已登录</b>' + (cfgFields.length ? ' · 已配置 ' + cfgFields.map((f) => f.label).join(' / ') : '')
-    : '状态：<b style="color:var(--amber)">未登录</b>' + (cfgFields.length ? '（已配置 ' + cfgFields.map((f) => f.label).join(' / ') + '，但凭据可能已失效，请重新授权）' : '（未配置任何凭据）');
-  // 所有平台都显示「去官网」；「我已授权·保存会话」仅 cookie 平台
-  const cookieCapable = COOKIE_LOGIN_PROVIDERS.includes(pid);
-  $('authGoRow').classList.remove('hidden');
-  $('authGoBtn').textContent = cookieCapable ? '去官网授权' : '去官网获取密钥';
-  $('authSyncBtn').classList.toggle('hidden', !cookieCapable);
-  // 备用 tab 的平台用 Edge 授权（端口 9223），主力用 Chrome（9222）
-  const BACKUP_BROWSER_IDS = ['ark2', 'bailian', 'minimax', 'tencent'];
-  const useEdge = BACKUP_BROWSER_IDS.includes(pid);
-  const browserLabel = useEdge ? 'Edge' : 'Chrome';
-  const debugPort = useEdge ? 9223 : 9222;
-  $('authTip').innerHTML = pid === 'deepseek'
-    ? '先<b>打开并登录 platform.deepseek.com</b>（标签页保持开启）→ 回来点「我已授权 · 保存会话」：扩展会读取 Cookie + 页面 localStorage 里的会话令牌。未装扩展时也可手动粘贴下面字段（会话令牌过期后需重新同步）。'
-    : cookieCapable
-      ? `登录官网后点「我已授权 · 保存会话」会连接/自动启动本机 <b>${browserLabel}</b>（端口 <code>${debugPort}</code>）读取会话；也可手动粘贴下面字段。`
-      : '该平台用🔑密钥鉴权：点「去官网获取密钥」到控制台拿 AK/SK 或 API Key，粘贴到下面保存即可（无需浏览器 Cookie）。';
-  const list = $('authList');
-  const rows = pv.fields.map((f) => `
-    <div class="auth-field">
-      <div class="auth-field-head">
-        <span class="auth-label">${escapeHtml(f.label)} <em class="${f.configured ? 'ok' : ''}">${f.configured ? '已配置 · ' + escapeHtml(f.masked) : '未配置'}</em></span>
-        <span class="auth-type">${f.type === 'cookie' ? '🍪 Cookie' : f.type === 'number' ? '⚙️ 配置' : '🔑 密钥'}</span>
-      </div>
-      <div class="auth-input-row">
-        <input type="password" data-field="${escapeHtml(f.key)}" placeholder="${f.configured ? '已配置，如需更新请粘贴新值' : '粘贴 ' + escapeHtml(f.label)}" autocomplete="off" />
-      </div>
-    </div>`).join('');
-  list.innerHTML = `
-    <div class="auth-sec">
-      <div class="auth-note">${escapeHtml(pv.note)}</div>
-      ${rows}
-      <div class="auth-input-row" style="justify-content:flex-end;margin-top:2px">
-        <button class="auth-save" data-pid="${escapeHtml(pid)}">保存</button>
-      </div>
-      <div class="auth-msg" data-msg="${escapeHtml(pid)}"></div>
-    </div>`;
-}
-
-// 去官网授权
-$('authGoBtn').addEventListener('click', () => {
-  const url = LOGIN_URLS[authCtx.provider];
-  if (url) window.open(url, '_blank');
-  $('authMsg').textContent = '已在新标签页打开官方授权页，登录完成后点「我已授权 · 保存会话」';
-});
-
-// 我已授权 · 保存会话：优先通过浏览器扩展同步（静默读 cookie 推云端），无扩展时回退 CDP
-$('authSyncBtn').addEventListener('click', async () => {
-  $('authSyncBtn').disabled = true;
-  // 1) 若装了「会话同步」扩展，直接调扩展同步（最可靠，绕开 Chrome 加密/调试端口限制）
-  if (window.__quotaSyncExt) {
-    $('authMsg').textContent = '正在通过浏览器扩展同步会话…';
-    const res = await new Promise((resolve) => {
-      const t = setTimeout(() => resolve(null), 8000);
-      window.addEventListener('message', function h(e) {
-        if (e.data && e.data.type === 'quota-sync-done') {
-          clearTimeout(t);
-          window.removeEventListener('message', h);
-          resolve(e.data);
-        }
-      });
-      window.postMessage({ type: 'quota-sync' }, '*');
-    });
-    if (res && res.ok) {
-      if (authCtx.provider === 'deepseek' && res.deepseek === 'no-session') {
-        $('authMsg').innerHTML = '⚠️ DeepSeek 会话读取失败：请先在新标签页<b>打开并登录 platform.deepseek.com</b>（保持开启），再点一次「我已授权 · 保存会话」';
-      } else {
-        $('authMsg').innerHTML = '✅ 已通过扩展同步会话！正在刷新…';
-        await renderAuth(authCtx.provider);
-        fetchQuota(true);
-        setTimeout(() => $('authModal').classList.add('hidden'), 1500);
-      }
-    } else {
-      $('authMsg').innerHTML = '❌ 扩展同步未完成。请确认扩展已配置云端地址，或点扩展图标 →「立即同步」';
-    }
-    $('authSyncBtn').disabled = false;
-    return;
-  }
-  // 2) 无扩展：回退到连接本机 Chrome（DevTools 协议）
-  $('authMsg').textContent = '正在连接本机 Chrome 会话…';
-  const r = await (await fetch('/api/login/auto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: authCtx.provider }) })).json();
-  if (r.ok) {
-    $('authMsg').innerHTML = '✅ 会话已保存！正在刷新…';
-    await renderAuth(authCtx.provider);
-    fetchQuota(true);
-    setTimeout(() => $('authModal').classList.add('hidden'), 1500);
-  } else {
-    $('authMsg').innerHTML = '❌ ' + escapeHtml(r.error || '同步失败').replace(/\n/g, '<br/>');
-  }
-  $('authSyncBtn').disabled = false;
-});
-
-// 保存某供应商的鉴权字段
-document.addEventListener('click', async (e) => {
-  const btn = e.target.closest('.auth-save');
-  if (!btn) return;
-  const pid = btn.dataset.pid;
-  const sec = btn.closest('.auth-sec');
-  const fields = {};
-  sec.querySelectorAll('input[data-field]').forEach((inp) => {
-    const v = inp.value.trim();
-    if (v) fields[inp.dataset.field] = v;
-  });
-  const msgEl = sec.querySelector('[data-msg]');
-  if (Object.keys(fields).length === 0) {
-    msgEl.textContent = '请先粘贴要更新的字段（留空表示不修改）';
-    return;
-  }
-  msgEl.textContent = '保存中…';
-  const r = await (
-    await fetch('/api/auth/update', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ providerId: pid, fields }),
-    })
-  ).json();
-  if (!r.ok) {
-    msgEl.textContent = '❌ ' + (r.error || '保存失败');
-    return;
-  }
-  msgEl.textContent = `✅ 已保存 ${r.changed} 项，正在用新凭据刷新…`;
-  sec.querySelectorAll('input[data-field]').forEach((inp) => (inp.value = ''));
-  renderAuth(pid);
-  fetchQuota(true);
+  window.location.href = '/config#' + encodeURIComponent(btn.dataset.pid);
 });
 
 // 每秒刷新倒计时展示
 setInterval(tick, 1000);
 
+// 左右方向键翻页
+document.addEventListener('keydown', (e) => {
+  if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+  const el = $('pager');
+  if (!el || el.classList.contains('hidden')) return;
+  if (e.key === 'ArrowLeft') { const b = $('pagePrev'); if (b && !b.disabled) b.click(); }
+  if (e.key === 'ArrowRight') { const b = $('pageNext'); if (b && !b.disabled) b.click(); }
+});
+
+// 授权状态自动刷新：配置页完成官网授权后，这里无需手动刷新即可翻成「已登录」
+setInterval(() => { if (!document.hidden) refreshAuthInfo(); }, 8000);
+
 (async function init() {
   const build = new URLSearchParams(location.search).get('v') || 'dev';
   $('buildTag').textContent = 'build ' + build;
-  $('footer').innerHTML = `密钥配置：<code>quota-dashboard/config.json</code>（仅本机 127.0.0.1 可访问，密钥不会回传到页面） · 六家平台均为<b>纯 HTTP + 密钥</b>查询，无需安装任何 AI 平台客户端 · 微信提醒经 <code>wecom-cli</code>（企业微信机器人） · <span style="opacity:.7">build ${build}</span>`;
+  $('footer').innerHTML = `凭据存本机 <code>data/dashboard.db</code>（仅 127.0.0.1 可访问，不会回传页面） · 各平台均为<b>纯 HTTP</b> 查询，无需安装任何 AI 平台客户端 · 微信提醒经 <code>wecom-cli</code>（企业微信机器人） · <span style="opacity:.7">build ${build}</span>`;
   await fetchStatus();
   await refreshAuthInfo();
   render();

@@ -4,3 +4,5 @@ config.json
 data/
 *.log
 public/login-*.png
+data/chrome-profile/
+public/login-*.png

@@ -18,8 +18,8 @@ const STATUS_TEXT = {
   3: '不在当前套餐中',
 };
 
-export async function collect(cfg) {
-  const p = cfg.providers.minimax;
+export async function collect(cfg, pid = id) {
+  const p = cfg.providers[pid];
   if (!p.enabled) return { ok: false, skipped: true, items: [] };
 
   if (!p.apiKey) {

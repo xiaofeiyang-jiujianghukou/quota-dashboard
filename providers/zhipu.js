@@ -19,20 +19,23 @@ const ZHIPU_STATUS_TEXT = {
   FROZEN: '冻结',
 };
 
-export async function collect(cfg) {
-  const p = cfg.providers.zhipu;
+export async function collect(cfg, pid = id) {
+  const p = cfg.providers[pid];
   if (!p.enabled) return { ok: false, skipped: true, items: [] };
 
-  // 用户通常只有一把 key：优先 apiKey，缺省回退 codingPlanKey，两个接口都用它试
+  // 鉴权二选一：① API Key（apiKey/codingPlanKey）② 控制台会话（sessionToken + sessionCookie，无需 Key）
   const key = p.apiKey || p.codingPlanKey;
-  if (!key) {
+  const hasSession = !!(p.sessionToken && p.sessionCookie);
+  if (!key && !hasSession) {
     return {
       ok: false,
       items: [],
-      error: '未配置 zhipu.apiKey / codingPlanKey',
-      detail: '在 config.json 的 zhipu 段填入智谱开放平台 API Key（open.bigmodel.cn → API Keys）',
+      error: '智谱未授权',
+      detail: '配置页点「授权登录」，在打开的官网窗口登录一次即可（无需手动填 Key）',
     };
   }
+  // 有会话时走控制台通道（与页面同一套接口，数据完全一致）
+  if (!key && hasSession) return collectBySession(cfg, p, pid);
 
   const items = [];
   const errors = [];
@@ -217,4 +220,103 @@ export async function collect(cfg) {
     };
   }
   return { ok: true, items, extra: { warnings: errors } };
+}
+
+/**
+ * 控制台会话通道（无需 API Key）：用登录 JWT + Cookie 调控制台自己的接口。
+ * 与网页上看到的数据同源（额度百分比、套餐档位、价格、有效期）。
+ */
+async function collectBySession(cfg, p, pid) {
+  const timeoutMs = cfg.requestTimeoutMs || 30000;
+  const headers = {
+    authorization: String(p.sessionToken).replace(/^Bearer\s+/i, ''),
+    cookie: p.sessionCookie,
+    accept: 'application/json, text/plain, */*',
+    referer: 'https://open.bigmodel.cn/coding-plan/personal/overview',
+  };
+  const items = [];
+  const get = async (path) => {
+    const res = await fetch('https://open.bigmodel.cn' + path, { headers, signal: AbortSignal.timeout(timeoutMs) });
+    const json = await res.json().catch(() => null);
+    if (!json) throw new Error(`返回非 JSON（HTTP ${res.status}）`);
+    if (json.success === false) throw new Error(json.msg || `接口失败（${json.code}）`);
+    return json.data;
+  };
+
+  // 1) 额度：limits[] → 每个窗口一条
+  let quotaOk = false;
+  try {
+    const data = await get('/api/monitor/usage/quota/limit');
+    const UNIT = { 1: '每日', 2: '每月', 3: '5 小时', 6: '每周' };
+    for (const l of data.limits || []) {
+      const label = UNIT[l.unit] || `窗口${l.unit}`;
+      items.push({
+        key: `zhipu-quota-${l.unit}`,
+        title: `Coding Plan · ${label}额度`,
+        kind: 'plan',
+        total: toNum(l.usage),
+        used: toNum(l.currentValue),
+        remaining: toNum(l.remaining),
+        percentUsed: toNum(l.percentage),
+        unit: 'used',
+        resetAt: epochToISO(l.nextResetTime),
+        planName: data.level ? `GLM Coding ${String(data.level).toUpperCase()}` : '',
+        extra: { source: 'console' },
+      });
+      quotaOk = true;
+    }
+  } catch (e) {
+    items.push({ key: 'zhipu-quota-error', title: 'Coding Plan 额度', kind: 'info', extra: { note: '获取失败：' + e.message } });
+  }
+
+  // 2) 套餐档位/价格/有效期（会话接口）
+  try {
+    const list = await get('/api/biz/subscription/list');
+    const subs = Array.isArray(list) ? list.filter((x) => x && (x.status === 'VALID' || x.status === 'EXPIRING')) : [];
+    const sub = subs[0] || null;
+    if (sub) {
+      // valid 形如 "2026-11-28 10:00:00-2027-02-28 10:00:00"：日期自带横杠，必须用正则取两端
+      const spans = String(sub.valid || '').match(/\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/g) || [];
+      const start = spans[0] || '';
+      const end = spans[spans.length - 1] || '';
+      let expiresAt = null;
+      if (end) {
+        const d = new Date(end.replace(' ', 'T') + '+08:00');
+        expiresAt = Number.isNaN(d.getTime()) ? null : d.toISOString();
+      }
+      const planItem = items.find((i) => i.kind === 'plan');
+      const target = planItem || items[0];
+      if (target) {
+        const names = [...new Set(subs.map((x) => x.productName).filter(Boolean))];
+        const price = toNum(sub.actualPrice ?? sub.standardPrice);
+        const cycleText = sub.billingCycle === 'quarterly' ? '季' : sub.billingCycle === 'yearly' ? '年' : '月';
+        // 套餐信息应用到所有额度条目（同一份订阅），每行都能看到套餐名/价格/到期
+        for (const it of items.filter((x) => x.kind === 'plan')) {
+          it.planName = names.length ? names.join(' + ') : it.planName;
+          it.price = price;
+          it.pricePeriod = sub.billingCycle || 'monthly';
+          it.priceText = price != null ? `¥${price}/${cycleText}` : '';
+          if (expiresAt) it.expiresAt = expiresAt;
+          it.extra = { ...(it.extra || {}), autoRenew: sub.autoRenew === 1, validFrom: start || null };
+        }
+      }
+      // 额外给一条纯信息来源，便于核对
+      if (!planItem) {
+        items.push({
+          key: 'zhipu-subscription',
+          title: `套餐 · ${sub.productName || 'GLM Coding Plan'}`,
+          kind: 'info',
+          expiresAt: expiresAt || undefined,
+          extra: { note: `批次 ${sub.currentPeriod || 1} · ${sub.autoRenew === 1 ? '自动续费' : '不自动续费'} · 有效期至 ${end ? end.trim() : '未知'}` },
+        });
+      }
+    }
+  } catch {
+    /* 套餐信息失败不影响额度展示 */
+  }
+
+  if (!items.length) {
+    return { ok: false, items: [], error: '控制台会话未能取到数据（会话可能已过期，请重新授权登录）' };
+  }
+  return { ok: quotaOk || items.some((i) => i.kind === 'plan' || i.kind === 'info'), items };
 }
