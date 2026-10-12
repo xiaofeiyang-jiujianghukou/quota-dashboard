@@ -43,7 +43,7 @@ async function collectFor(cfg, pid, displayName) {
       detail: `配置页粘贴控制台 Cookie + CSRF Token 即可（无需 AK/SK）`,
     };
   }
-  const r = await collectHttp(cfg, p);
+  const r = await collectHttp(cfg, p, pid);
   // 第二个实例条目 key 换前缀，避免与主账号 key 冲突
   if (pid !== 'ark' && Array.isArray(r.items)) {
     for (const it of r.items) if (it.key) it.key = it.key.replace(/^ark-/, `${pid}-`);
@@ -87,7 +87,29 @@ function epochToISO(ms) {
   return new Date(n).toISOString();
 }
 
-async function collectHttp(cfg, p) {
+let lastAuthRefresh = 0; // 令牌续期限流（5 分钟一次，避免频繁起浏览器）
+
+/**
+ * 带"令牌过期自愈"的控制台调用：
+ * 火山控制台的 CSRF/会话几小时就轮换，报 InvalidCSRFToken / NotLogin / Reclaimed 时，
+ * 用已保存的浏览器配置静默重抓一份凭据并重试一次（不弹窗、不需要用户操作）。
+ */
+async function callConsoleSelfHeal(p, pid, action, timeoutMs) {
+  try {
+    return await callVolcConsole(p, action, timeoutMs);
+  } catch (e) {
+    if (!/InvalidCSRFToken|NotLogin|Reclaimed|AccessDenied/i.test(e.message)) throw e;
+    if (!p.sessionCookie || Date.now() - lastAuthRefresh < 5 * 60 * 1000) throw e;
+    lastAuthRefresh = Date.now();
+    const { refreshConsoleAuth } = await import('../lib/login.js');
+    const fresh = await refreshConsoleAuth(pid);
+    if (!fresh.ok) throw e;
+    Object.assign(p, { csrfToken: fresh.csrfToken || p.csrfToken, sessionCookie: fresh.sessionCookie || p.sessionCookie });
+    return await callVolcConsole(p, action, timeoutMs);
+  }
+}
+
+async function collectHttp(cfg, p, pid) {
   const timeoutMs = cfg.requestTimeoutMs || 30000;
   const meta = readArkMeta(); // { expiresAt, planTier }（本机兜底）
   // 会话接口优先（控制台 ListSubscribeTrade）：真实档位/到期/续费
@@ -110,7 +132,7 @@ async function collectHttp(cfg, p) {
 
   // ---- ① Coding Plan（QuotaUsage 元素: { Level, Percent, ResetTimestamp(秒) }）----
   try {
-    const result = await callVolcConsole(p, 'GetCodingPlanUsage', timeoutMs);
+    const result = await callConsoleSelfHeal(p, pid, 'GetCodingPlanUsage', timeoutMs);
     statusNote = result.Status || '';
     const quotas = Array.isArray(result.QuotaUsage) ? result.QuotaUsage : [];
     if (quotas.length) planBlocks.push({ product: 'coding-plan', quotas });
@@ -120,7 +142,7 @@ async function collectHttp(cfg, p) {
 
   // ---- ② Agent Plan（AFP）：5小时/每日/每周/每月 ----
   try {
-    const result = await callVolcConsole(p, 'GetAFPUsage', timeoutMs);
+    const result = await callConsoleSelfHeal(p, pid, 'GetAFPUsage', timeoutMs);
     const windows = [
       ['AFPFiveHour', '5 小时'],
       ['AFPDaily', '每日'],
@@ -149,11 +171,12 @@ async function collectHttp(cfg, p) {
   }
 
   if (!planBlocks.length) {
+    const authIssue = /InvalidCSRFToken|NotLogin|Reclaimed|AccessDenied/i.test(statusNote || '');
     return {
       ok: false,
       items: [],
-      error: '账号下没有生效的 Coding/Agent Plan',
-      noPlan: true, // 已授权但该账号无套餐：UI 按"信息"呈现，而不是报错
+      error: authIssue ? '控制台会话已失效（需重新授权登录）' : '账号下没有生效的 Coding/Agent Plan',
+      noPlan: !authIssue, // 已授权但该账号无套餐：UI 按"信息"呈现；令牌失效则按故障呈现
       detail: `该账号已登录，但 GetCodingPlanUsage / GetAFPUsage 均无配额窗口${statusNote ? `（${statusNote}）` : ''}`,
     };
   }
