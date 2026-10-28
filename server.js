@@ -147,10 +147,14 @@ async function refresh(force = false) {
     return cache;
   }
   inflight = collectAll(cfg)
-    .then((result) => {
-      // 配置/面板分离：面板只呈现"有效"供应商；非有效的（停用/过期/未配置）从面板数据中剔除
+    .then(async (result) => {
+      // 配置/面板分离：面板只呈现"有效且已授权"的供应商
+      //（停用/过期/未配置/授权失效 → 一律不在面板显示；旧数据也不展示）
       result.lifecycle = lifecycleAll(cfg);
-      result.providers = result.providers.filter((pv) => !pv.skipped && isEffective(cfg, pv.id));
+      const auth = await authStatus(cfg); // 内部 60s 缓存，不额外增加请求压力
+      result.providers = result.providers.filter(
+        (pv) => !pv.skipped && isEffective(cfg, pv.id) && auth[pv.id]?.loggedIn === true
+      );
       cache = result;
       lastFetch = Date.now();
       // 提醒评估（内部异步发送，异常不外抛）

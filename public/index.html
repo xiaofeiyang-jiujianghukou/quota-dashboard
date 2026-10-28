@@ -192,10 +192,13 @@
   /* 主力 / 备用 分栏 tab */
   .tabsrow { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin: 12px 0 10px; flex-wrap: wrap; }
   .tabs { display: flex; gap: 8px; }
-  .pager { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
-  .pager button { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 5px 11px; font-size: 13px; cursor: pointer; line-height: 1; }
+  .pager-wrap { display: flex; justify-content: center; margin: 18px 0 6px; }
+  .pager { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); background: var(--panel); border: 1px solid var(--border); border-radius: 999px; padding: 7px 14px; }
+  .pager.hidden { display: none; }
+  .pager button { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 14px; font-size: 15px; cursor: pointer; line-height: 1; }
   .pager button:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
   .pager button:disabled { opacity: .4; cursor: not-allowed; }
+  .pager .pg-sub { color: var(--muted); font-size: 11.5px; }
   .pager .dots { display: flex; gap: 5px; margin: 0 4px; }
   .pager .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); cursor: pointer; }
   .pager .dot.on { background: var(--blue); }
@@ -293,11 +296,10 @@
     </div>
   </header>
 
-  <div class="tabsrow">
-    <div class="pager hidden" id="pager"></div>
-  </div>
+
   <div class="statusbar" id="statusbar"></div>
   <div class="grid" id="grid"></div>
+  <div class="pager-wrap"><div class="pager hidden" id="pager"></div></div>
 
   <!-- 微信提醒设置弹窗 -->
   <div id="wecomModal" class="modal hidden">
@@ -603,10 +605,6 @@ function render() {
     renderPager(0, 1);
     return;
   }
-  // 卡片分页：每页 CARDS_PER_PAGE 个，左右箭头 / 圆点翻页
-  const totalPages = Math.max(1, Math.ceil(cards.length / CARDS_PER_PAGE));
-  if (cardPage > totalPages) cardPage = totalPages;
-  if (cardPage < 1) cardPage = 1;
   // 按套餐拆卡：一个供应商有多个套餐就出多张卡（每张卡只装该套餐的额度窗口）
   const units = [];
   for (const pv of cards) {
@@ -620,6 +618,7 @@ function render() {
   const totalUnits = units.length;
   const totalUnitPages = Math.max(1, Math.ceil(totalUnits / CARDS_PER_PAGE));
   if (cardPage > totalUnitPages) cardPage = totalUnitPages;
+  if (cardPage < 1) cardPage = 1;
   const pageUnits = units.slice((cardPage - 1) * CARDS_PER_PAGE, cardPage * CARDS_PER_PAGE);
   renderPager(totalUnits, totalUnitPages);
   for (const unit of pageUnits) {
@@ -740,7 +739,7 @@ let cardPage = Math.max(1, Number(localStorage.getItem('quotaPage') || 1));
 function renderPager(total, totalPages) {
   const el = $('pager');
   if (!el) return;
-  if (total <= CARDS_PER_PAGE) {
+  if (!totalPages || totalPages <= 1 || total <= 0) {
     el.classList.add('hidden');
     el.innerHTML = '';
     return;
@@ -749,7 +748,7 @@ function renderPager(total, totalPages) {
   const dots = Array.from({ length: totalPages }, (_, i) => `<span class="dot ${i + 1 === cardPage ? 'on' : ''}" data-page="${i + 1}"></span>`).join('');
   el.innerHTML = `
     <button id="pagePrev" ${cardPage <= 1 ? 'disabled' : ''} title="上一页">‹</button>
-    <span>第 <b>${cardPage}</b> / ${totalPages} 页 · 共 ${total} 张卡</span>
+    <span>第 <b>${cardPage}</b> / <b>${totalPages}</b> 页<span class="pg-sub">（共 ${total} 张卡，每页 ${CARDS_PER_PAGE} 张）</span></span>
     <span class="dots">${dots}</span>
     <button id="pageNext" ${cardPage >= totalPages ? 'disabled' : ''} title="下一页">›</button>`;
   const go = (p) => {
